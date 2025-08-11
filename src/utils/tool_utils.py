@@ -1,5 +1,8 @@
 import sys
-sys.path.insert(0, '/home/sunseed/Music/lib')
+from pathlib import Path
+
+LIB_PATH = Path(r"D:\PythonDevelop\Projects\PycharmProjects\flexivrobot\libs")  # 假设放到libs目录
+sys.path.append(str(LIB_PATH.resolve()))
 
 import flexivrdk
 import logging
