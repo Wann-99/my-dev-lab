@@ -43,6 +43,8 @@ class RobotController:
         # 解耦第三方SDK：用Helper类封装（推荐）
         self.robot_helper = FlexivRdkHelper(robot_sn, self.logger)
         self.tool = self.robot_helper.get_tool()  # 按需封装Tool操作
+        self.robot_helper
+
 
     def print_robot_force(self, data: list, index: int) -> float | None:
         """工具函数：安全获取机器人力传感器数据"""

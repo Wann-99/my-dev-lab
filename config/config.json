@@ -4,7 +4,7 @@
     "grip_pose": [0.64751,0.28603 , 0.250],
     "grip_up_pose": [0.64751,0.28603 , 0.20998],
     "grip_pose_angle": [0, 180, 91.56],
-    "robot_sn": "Rizon4s-062444",
+    "robot_sn": "Rizon4s-062067",
     "vel": 0.6,
     "acc": 2.5,
     "zone_Radius": "Z1",

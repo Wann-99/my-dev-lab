@@ -9,7 +9,7 @@ def main():
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path("config/config.json"),  # 配置文件路径（根据实际调整）
+        default=Path("../../../config/config.json"),  # 配置文件路径（根据实际调整）
         help="Path to the configuration file (JSON)"
     )
     args = parser.parse_args()
