@@ -17,7 +17,7 @@ if __name__ == "__main__":
     # 机器人的默认地址是192.168.2.100，可以修改为实际IP地址
     # 如果机器人IP是默认的，则不需要定义RobotSetting对象
 
-    setting = RobotSetting(ip="192.168.100.1")
+    setting = RobotSetting(ip="192.168.2.100")
     # 需继承ParallelProgram类，然后在类中定义函数，函数名必须以pp_开头，类中可以定义多个pp_函数
     # pp程序默认auto_booted为False, auto_looped为False，定义函数时如传入参数，则按照用户定义的参数来配置并行程序
     # 可以添加这两个参数(非必填)

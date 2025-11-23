@@ -49,7 +49,7 @@ class CalculatePosition(ParallelProgram):
                 base_y,
                 base_z,
                 0,
-                180,
+                -90,
                 0,
                 row,
                 col,

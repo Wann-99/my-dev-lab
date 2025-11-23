@@ -79,7 +79,7 @@ if modbus_tcp_open(1, "192.168.2.100", 502) then
         modbus_tcp_close(1)
         return false
     end
-    local arr_row_data = calculate_position(base_x, base_y, base_z, 0, 180, 0, row, col, layer, row_spacing, col_spacing, layer_spacing, reference_pose_list)
+    local arr_row_data = calculate_position(base_x, base_y, base_z, 0, -90, 0, row, col, layer, row_spacing, col_spacing, layer_spacing, reference_pose_list)
     if (#arr_row_data == 0) then
         local a_coord = {"0,0,0,0,180,0,WORLD,WORLD_ORIGIN,0,-40,0,90,0,40,0,0,0,0,0,0,0"}
         local arr_coord = {}
