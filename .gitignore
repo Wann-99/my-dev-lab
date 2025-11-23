@@ -29,3 +29,4 @@ Thumbs.db
 src/logs/
 libs/*.pyd
 MainLogger/
+/src/business/clac_beat/result/
