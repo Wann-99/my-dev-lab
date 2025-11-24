@@ -2,214 +2,69 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot Cycle Time 分析</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robot Beat Analysis</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet">
 
-    <!-- 添加Plotly JavaScript库 -->
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/datatables.net-bs5@1.12.1/css/dataTables.bootstrap5.min.css">
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" rel="stylesheet">
-    <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+    <!-- 自定义CSS -->
+    <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
+
 <div class="container">
-    <h2 class="text-center mt-4 mb-4">Robot Cycle Time 分析</h2>
+    <h1 class="text-center text-primary mb-4">Robot Beat Analysis</h1>
+    <div class="alert alert-info text-center" id="info-message">请上传 CSV 文件以开始分析</div>
 
-    <div class="upload-container">
-        <div class="upload-card">
-            <div class="drop-zone" id="dropZone">
-                <div class="drop-icon">
-                    <i class="fas fa-file-upload"></i>
-                </div>
-                <p class="drop-text">拖放CSV文件到此处，或</p>
-                <button type="button" class="btn btn-primary btn-lg" id="browseBtn">选择文件</button>
-                <input type="file" id="csvFile" accept=".csv" style="display: none;">
-                <div class="file-info" id="fileInfo" style="display: none;"></div>
-                <button type="button" class="btn btn-success btn-lg mt-3" id="uploadBtn" style="display: none;">开始分析</button>
-            </div>
-
-            <div class="mt-3 small text-muted">
-                <p><strong>支持的CSV格式需包含以下字段：</strong></p>
-                <ul>
-                    <li><code>NodeTime</code> - 节点时间（数值型）</li>
-                    <li><code>NodePath</code> - 节点路径（文本型）</li>
-                    <li><code>ProgramTime</code> - 程序时间（数值型）</li>
-                </ul>
-            </div>
-        </div>
+    <!-- 上传文件 -->
+    <div class="mb-3">
+        <label for="csvFile" class="form-label">选择 CSV 文件</label>
+        <input class="form-control" type="file" id="csvFile">
     </div>
 
-    <div id="status" class="alert alert-info mt-3" style="display: none;"></div>
+    <!-- 上传按钮 -->
+    <button class="btn btn-primary w-100" id="upload-btn">上传并分析</button>
 
-    <div id="downloadArea" style="display:none;" class="mt-3">
-        <a id="downloadLink" class="btn btn-success btn-sm" href="#" target="_blank">
-            <i class="fas fa-download"></i> 下载分析结果 Excel
-        </a>
+    <div class="result-container">
+        <!-- 表格展示 -->
+        <div id="results-table" class="table-responsive"></div>
+        <div id="summary-table" class="table-responsive"></div>
+        <div id="anomalies-table" class="table-responsive"></div>
     </div>
 
-    <div id="chartsArea" style="display:none;" class="mt-4">
-        <div class="row">
-            <div class="col-md-6 mb-4">
-                <div class="card h-100">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0">循环时间趋势图</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="lineChart" class="chart-container"></div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6 mb-4">
-                <div class="card h-100">
-                    <div class="card-header bg-success text-white">
-                        <h5 class="mb-0">循环时间分布箱线图</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="boxChart" class="chart-container"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-md-6 mb-4">
-                <div class="card h-100">
-                    <div class="card-header bg-warning text-white">
-                        <h5 class="mb-0">异常循环点</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="scatterChart" class="chart-container"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <!-- 图表展示 -->
+    <div class="chart-container">
+        <h4 id="line-chart-title">各节点Beat时间趋势</h4>
+        <div id="line-chart"></div>
     </div>
 
-    <div id="tablesArea" style="display:none;" class="mt-4">
-        <h4>Cycle_Details</h4>
-        <div class="table-responsive" id="results_table_container"></div>
+    <div class="chart-container">
+        <h4 id="box-chart-title">各节点循环时间分布</h4>
+        <div id="box-chart"></div>
+    </div>
 
-        <h4>Summary</h4>
-        <div class="table-responsive" id="summary_table_container"></div>
+    <div class="chart-container">
+        <h4 id="scatter-chart-title">异常循环点</h4>
+        <div id="scatter-chart"></div>
+    </div>
 
-        <h4>Anomalies</h4>
-        <div class="table-responsive" id="anomalies_table_container"></div>
+    <div id="download-link-container">
+        <a href="#" id="download-link" class="btn btn-success" style="display: none;">下载分析结果</a>
     </div>
 </div>
 
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min"></script>
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
 
-<script>
-$(document).ready(function() {
-    // 文件选择功能
-    $('#browseBtn').click(function() {
-        $('#csvFile').click();
-    });
+<!-- DataTables JS -->
+<script src="https://cdn.jsdelivr.net/npm/datatables.net@1.12.1/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/datatables.net-bs5@1.12.1/js/dataTables.bootstrap5.min.js"></script>
 
-    $('#csvFile').change(function(e) {
-        if (e.target.files.length) {
-            const fileName = e.target.files[0].name;
-            $('#fileInfo').html(`已选择: ${fileName}`).show();
-            $('#uploadBtn').show();
-        }
-    });
+<!-- 自定义JS -->
+<script src="/static/js/app.js"></script>
 
-    // 拖放功能
-    $('#dropZone').on('dragover', function(e) {
-        e.preventDefault();
-        $(this).addClass('dragover');
-    });
-
-    $('#dropZone').on('dragleave', function(e) {
-        e.preventDefault();
-        $(this).removeClass('dragover');
-    });
-
-    $('#dropZone').on('drop', function(e) {
-        e.preventDefault();
-        $(this).removeClass('dragover');
-
-        const files = e.originalEvent.dataTransfer.files;
-        if (files.length && files[0].name.endsWith('.csv')) {
-            $('#csvFile')[0].files = files;
-            const fileName = files[0].name;
-            $('#fileInfo').html(`已选择: ${fileName}`).show();
-            $('#uploadBtn').show();
-        } else {
-            $('#fileInfo').html('请选择有效的CSV文件').show();
-        }
-    });
-
-    // 上传和分析
-    $('#uploadBtn').click(function() {
-        const formData = new FormData();
-        formData.append('file', $('#csvFile')[0].files[0]);
-
-        $.ajax({
-            url: '/api/analyze',
-            type: 'POST',
-            data: formData,
-            processData: false,
-            contentType: false,
-            beforeSend: function() {
-                $('#status').html('正在分析数据...').show();
-                $('#uploadBtn').prop('disabled', true);
-            },
-            success: function(response) {
-                if (response.error) {
-                    $('#status').html(`错误: ${response.error}`).removeClass('alert-info').addClass('alert-danger').show();
-                    $('#uploadBtn').prop('disabled', false);
-                    return;
-                }
-
-                $('#status').html('分析完成！').removeClass('alert-info').addClass('alert-success').show();
-
-                // 更新下载链接
-                $('#downloadLink').attr('href', response.download_link);
-                $('#downloadArea').show();
-
-                // 渲染图表
-                $('#lineChart').html(response.line_chart_html);
-                $('#boxChart').html(response.box_chart_html);
-                $('#scatterChart').html(response.scatter_chart_html);
-
-                // 渲染表格
-                $('#results_table_container').html(response.results_table_html);
-                $('#summary_table_container').html(response.summary_table_html);
-                $('#anomalies_table_container').html(response.anomalies_table_html);
-
-                // 初始化DataTables
-                initDataTables();
-
-                // 显示结果区域
-                $('#chartsArea').show();
-                $('#tablesArea').show();
-
-                $('#uploadBtn').prop('disabled', false);
-            },
-            error: function(xhr) {
-                $('#status').html(`分析失败: ${xhr.responseJSON?.error || '未知错误'}`).removeClass('alert-info').addClass('alert-danger').show();
-                $('#uploadBtn').prop('disabled', false);
-            }
-        });
-    });
-
-    // 初始化DataTables
-    function initDataTables() {
-        $('table').DataTable({
-            responsive: true,
-            pageLength: 10,
-            lengthMenu: [5, 10, 25, 50, 100]
-        });
-    }
-});
-</script>
 </body>
 </html>
