@@ -132,10 +132,11 @@ body {
 /* 重新构建分页按钮样式 */
 .dataTables_paginate {
     display: flex;
-    justify-content: flex-start;
+    justify-content: center;
     align-items: center;
     gap: 8px;
     margin-top: 10px;
+    width: 100%;
 }
 
 .dataTables_paginate .paginate_button {

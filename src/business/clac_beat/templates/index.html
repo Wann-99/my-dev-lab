@@ -20,8 +20,8 @@
         </div>
 
         <div class="upload-card">
-            <h3>上传数据文件进行分析</h3>
-            <p>选择一个CSV文件进行分析，文件必须包含运动节拍数据。</p>
+            <h3>上传CSV文件</h3>
+            <p>上传需要分析节拍的CSV文件（在机器人运行log中）。</p>
             <div class="file-input-wrapper">
                 <input type="file" id="csvFile" accept=".csv">
                 <div class="file-input-placeholder">
@@ -72,16 +72,12 @@
         <div id="chart-section" class="chart-container">
             <h4><i class="bi bi-graph-up"></i>节拍分析图</h4>
             <div class="chart-wrapper">
-                <h5>循环时间趋势图</h5>
+                <h5>单个节点循环时间图</h5>
                 <div id="lineChart"></div>
             </div>
             <div class="chart-wrapper">
                 <h5>循环时间分布图</h5>
                 <div id="boxChart"></div>
-            </div>
-            <div class="chart-wrapper">
-                <h5>异常点分布图</h5>
-                <div id="scatterChart"></div>
             </div>
         </div>
 

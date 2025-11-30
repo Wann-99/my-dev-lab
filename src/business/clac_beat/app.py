@@ -8,6 +8,8 @@ import plotly.graph_objects as go
 import plotly.express as px
 import plotly.io as pio
 from werkzeug.utils import secure_filename
+import re
+import tempfile
 import uuid
 from datetime import datetime
 logging.basicConfig(
@@ -46,6 +48,21 @@ def validate_file_structure(df):
         raise ValueError(f"CSV missing columns: {missing_cols}")
     if df.empty:
         raise ValueError("CSV file is empty")
+
+def name_has_datetime(s: str) -> bool:
+    patterns = [
+        r'(?:^|[^0-9])(19|20)\d{2}[-_/.]?(0[1-9]|1[0-2])[-_/.]?(0[1-9]|[12]\d|3[01])(?:[^0-9]|$)',
+        r'(?:^|[^0-9])(0[1-9]|[12]\d|3[01])[-_/.]?(0[1-9]|1[0-2])[-_/.]?(19|20)\d{2}(?:[^0-9]|$)',
+        r'(?:^|[^0-9])(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?:[^0-9]|$)'
+    ]
+    time_patterns = [
+        r'(?:^|[^0-9])([01]\d|2[0-3])([0-5]\d)([0-5]\d)(?:[^0-9]|$)',
+        r'(?:^|[^0-9])([01]\d|2[0-3])[-_:]([0-5]\d)(?:[-_:]([0-5]\d))?(?:[^0-9]|$)'
+    ]
+    for rgx in patterns + time_patterns:
+        if re.search(rgx, s):
+            return True
+    return False
 
 def process_node_group(group):
     """Process each node group and calculate cycle details."""
@@ -207,13 +224,14 @@ def generate_charts(results, summary, anomalies):
             margin=dict(l=50, r=50, t=50, b=50),
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
+            dragmode='zoom',
             updatemenus=[dict(
                 type="dropdown", direction="down", x=0.0, xanchor="left", y=1.02, yanchor="top",
                 showactive=True, buttons=dropdown_buttons
             )]
         )
 
-        config = {'displayModeBar': True, 'displaylogo': False, 'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d'], 'responsive': True}
+        config = {'displayModeBar': True, 'displaylogo': False, 'modeBarButtonsToRemove': ['lasso2d', 'select2d'], 'responsive': True, 'scrollZoom': True}
         line_html = pio.to_html(line_fig, full_html=False, include_plotlyjs=False, config=config)
 
         # Box chart generation (same as before)
@@ -294,9 +312,10 @@ def api_analyze():
 
         file_id = str(uuid.uuid4())
         safe_basename = filename.rsplit(".", 1)[0]
-        csv_filename = f"{file_id}_{filename}"
-        csv_path = os.path.join(UPLOAD_FOLDER, csv_filename)
-        excel_filename = f"{file_id}_{safe_basename}_result.xlsx"
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        temp_dir = tempfile.gettempdir()
+        csv_path = os.path.join(temp_dir, f"{file_id}_{filename}")
+        excel_filename = f"{safe_basename}_result.xlsx" if name_has_datetime(safe_basename) else f"{safe_basename}_{ts}_result.xlsx"
         excel_path = os.path.join(UPLOAD_FOLDER, excel_filename)
 
         os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -311,7 +330,7 @@ def api_analyze():
         # Generate the HTML tables
         results_table_html = results.drop(columns=["NodePath", "DeltaTime", "DeltaRate"]).rename(
             columns={"NodePathDisplay": "NodePath", "DeltaTimeDisplay": "DeltaTime", "DeltaRateDisplay": "DeltaRate"}
-        ).to_html(classes="table table-striped table-bordered nowrap", index=False, escape=False)
+        ).to_html(classes="table table-striped table-bordered nowrap", index=False, escape=False, table_id="resultsTable")
 
         summary_display = summary.rename(columns={"NodePathDisplay": "NodePath"})
         summary_display["MinCycleID"] = summary_display["MinCycleID"].apply(lambda x: int(x) if x >= 0 else "N/A")
@@ -319,25 +338,29 @@ def api_analyze():
         # summary_display["CycleSumTime"] = summary_display["CycleSumTime"].round(4)
 
         summary_table_html = summary_display.to_html(
-            classes="table table-striped table-bordered nowrap", index=False, escape=False
+            classes="table table-striped table-bordered nowrap", index=False, escape=False, table_id="summaryTable"
         )
 
         anomalies_table_html = anomalies.drop(columns=["NodePath"], errors="ignore").rename(
             columns={"NodePathDisplay": "NodePath"}
-        ).to_html(classes="table table-striped table-bordered nowrap", index=False, escape=False)
+        ).to_html(classes="table table-striped table-bordered nowrap", index=False, escape=False, table_id="anomaliesTable")
 
         download_link = f"/download/{excel_filename}"
 
-        return jsonify({
+        response_json = {
             "results_table_html": results_table_html,
             "summary_table_html": summary_table_html,
             "anomalies_table_html": anomalies_table_html,
             "line_chart_html": line_html,
             "box_chart_html": box_html,
-            "scatter_chart_html": scatter_html,
             "download_link": download_link,
             "excel_filename": excel_filename
-        })
+        }
+        try:
+            os.remove(csv_path)
+        except Exception:
+            pass
+        return jsonify(response_json)
 
     except ValueError as ve:
         logger.error(f"ValueError: {ve}")
@@ -356,13 +379,13 @@ def download_file(filename):
         return jsonify({"error": "File download failed"}), 500
 
 if __name__ == "__main__":
-    # url = "http://127.0.0.1:5000/"
-    # try:
-    #     webbrowser.open(url)
-    # except Exception as e:
-    #     logger.warning(f"Unable to automatically open browser: {e}")
-    # app.run(host="127.0.0.1", port=5000, debug=False)
+    url = "http://127.0.0.1:5000/"
+    try:
+        webbrowser.open(url)
+    except Exception as e:
+        logger.warning(f"Unable to automatically open browser: {e}")
+    app.run(host="127.0.0.1", port=5000, debug=False)
     # print(app.url_map)
-    app.run(debug=True)
+    # app.run(debug=True)
 
 

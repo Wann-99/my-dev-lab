@@ -11,16 +11,42 @@ $(document).ready(function () {
     const anomaliesSection = $('#anomalies-section');
     const chartSection = $('#chart-section');
 
+    function destroyTable(selector) {
+        try {
+            var $el = $(selector);
+            if ($.fn.DataTable && $el.length && $.fn.DataTable.isDataTable($el)) {
+                $el.DataTable().clear().destroy();
+                $el.empty();
+            }
+        } catch (e) {}
+    }
+
+    function resetUI() {
+        destroyTable('#resultsTable');
+        destroyTable('#summaryTable');
+        destroyTable('#anomaliesTable');
+        resultsSection.hide();
+        summarySection.hide();
+        anomaliesSection.hide();
+        chartSection.removeClass('active');
+        $('#lineChart').empty();
+        $('#boxChart').empty();
+        $('#downloadBtn').hide().attr('href', '#');
+        infoMessage.removeClass('alert-danger alert-success alert-info').hide();
+    }
+
     // Handle file input change
     fileInput.on('change', function (e) {
         const file = e.target.files[0];
         if (file) {
             fileName.text(file.name);
             fileInfo.show();
-            uploadBtn.prop('disabled', false);
+            uploadBtn.html('<i class="bi bi-arrow-right-circle"></i> 上传并分析').prop('disabled', false);
+            resetUI();
         } else {
             fileInfo.hide();
             uploadBtn.prop('disabled', true);
+            resetUI();
         }
     });
 
@@ -59,7 +85,7 @@ $(document).ready(function () {
 
                 // 填充详细结果表格
                 if (response.results_table_html) {
-                    $('#resultsTable').html(response.results_table_html);
+                    $('#resultsTable').replaceWith(response.results_table_html);
                     $('#resultsTable').DataTable({
                         responsive: true,
                         searching: true,
@@ -79,7 +105,8 @@ $(document).ready(function () {
                             emptyTable: 'No data available in table',
                             paginate: { first: 'First', previous: 'Prev', next: 'Next', last: 'Last' }
                         },
-                        pagingType: 'simple_numbers'
+                        pagingType: 'simple_numbers',
+                        destroy: true
                     });
                     const rFilter = $('#resultsTable').closest('.dataTables_wrapper').find('.dataTables_filter input');
                     rFilter.addClass('form-control form-control-sm').attr('placeholder', 'Search');
@@ -88,7 +115,7 @@ $(document).ready(function () {
 
                 // 填充汇总结果表格
                 if (response.summary_table_html) {
-                    $('#summaryTable').html(response.summary_table_html);
+                    $('#summaryTable').replaceWith(response.summary_table_html);
                     $('#summaryTable').DataTable({
                         responsive: true,
                         searching: true,
@@ -108,7 +135,8 @@ $(document).ready(function () {
                             emptyTable: 'No data available in table',
                             paginate: { first: 'First', previous: 'Prev', next: 'Next', last: 'Last' }
                         },
-                        pagingType: 'simple_numbers'
+                        pagingType: 'simple_numbers',
+                        destroy: true
                     });
                     const sFilter = $('#summaryTable').closest('.dataTables_wrapper').find('.dataTables_filter input');
                     sFilter.addClass('form-control form-control-sm').attr('placeholder', 'Search');
@@ -117,7 +145,7 @@ $(document).ready(function () {
 
                 // 填充异常结果表格
                 if (response.anomalies_table_html) {
-                    $('#anomaliesTable').html(response.anomalies_table_html);
+                    $('#anomaliesTable').replaceWith(response.anomalies_table_html);
                     $('#anomaliesTable').DataTable({
                         responsive: true,
                         searching: true,
@@ -137,7 +165,8 @@ $(document).ready(function () {
                             emptyTable: 'No data available in table',
                             paginate: { first: 'First', previous: 'Prev', next: 'Next', last: 'Last' }
                         },
-                        pagingType: 'simple_numbers'
+                        pagingType: 'simple_numbers',
+                        destroy: true
                     });
                     const aFilter = $('#anomaliesTable').closest('.dataTables_wrapper').find('.dataTables_filter input');
                     aFilter.addClass('form-control form-control-sm').attr('placeholder', 'Search');
@@ -145,16 +174,13 @@ $(document).ready(function () {
                 }
 
                 // 显示图表（按需加载 Plotly）
-                if (response.line_chart_html || response.box_chart_html || response.scatter_chart_html) {
+                if (response.line_chart_html || response.box_chart_html) {
                     ensurePlotly().then(function () {
                         if (response.line_chart_html) {
                             $('#lineChart').html(response.line_chart_html);
                         }
                         if (response.box_chart_html) {
                             $('#boxChart').html(response.box_chart_html);
-                        }
-                        if (response.scatter_chart_html) {
-                            $('#scatterChart').html(response.scatter_chart_html);
                         }
                         chartSection.addClass('active');
                     });
@@ -163,6 +189,7 @@ $(document).ready(function () {
                 if (response.download_link) {
                     $('#downloadBtn').attr('href', response.download_link).show();
                 }
+                uploadBtn.html('<i class="bi bi-arrow-right-circle"></i> 上传并分析').prop('disabled', false);
             },
             error: function () {
                 loadingOverlay.removeClass('active');
