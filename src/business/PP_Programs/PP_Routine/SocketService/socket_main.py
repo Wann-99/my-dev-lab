@@ -59,7 +59,7 @@ class TcpServer:
             connection.close()  # 关闭连接
 
 
-    def start_server(self, host='192.168.100.205', port=20000):
+    def start_server(self, host='192.168.2.220', port=30000):
         # 创建一个TCP/IP套接字
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # 设置端口复用
