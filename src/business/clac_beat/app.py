@@ -12,6 +12,9 @@ import re
 import tempfile
 import uuid
 from datetime import datetime
+import threading
+import urllib.request
+import time
 logging.basicConfig(
     level=logging.WARNING,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -299,6 +302,21 @@ def js_files(filename):
 @app.route("/favicon.ico")
 def favicon():
     return send_from_directory(static_folder, 'favicon.ico')
+
+@app.route('/shutdown', methods=['GET','POST'])
+def shutdown():
+    func = request.environ.get('werkzeug.server.shutdown')
+    if func is None:
+        return jsonify({"error": "Not running with the Werkzeug Server"}), 400
+    func()
+    def _exit():
+        time.sleep(0.2)
+        try:
+            os._exit(0)
+        except Exception:
+            pass
+    threading.Thread(target=_exit, daemon=True).start()
+    return jsonify({"status": "shutting down"})
 @app.route("/api/analyze", methods=["POST"])
 def api_analyze():
     uploaded_file = request.files.get("csvFile")
@@ -378,14 +396,34 @@ def download_file(filename):
         logger.error(f"File download failed: {e}")
         return jsonify({"error": "File download failed"}), 500
 
+def _start_server():
+    app.run(host="127.0.0.1", port=5000, debug=False, use_reloader=False)
+
 if __name__ == "__main__":
-    url = "http://127.0.0.1:5000/"
     try:
-        webbrowser.open(url)
-    except Exception as e:
-        logger.warning(f"Unable to automatically open browser: {e}")
-    app.run(host="127.0.0.1", port=5000, debug=False)
-    # print(app.url_map)
-    # app.run(debug=True)
+        import webview
+        t = threading.Thread(target=_start_server, daemon=True)
+        t.start()
+        w = webview.create_window('Robot Beat Analysis', 'http://127.0.0.1:5000/')
+
+        def _on_closed():
+            try:
+                urllib.request.urlopen('http://127.0.0.1:5000/shutdown')
+            except Exception:
+                pass
+            try:
+                os._exit(0)
+            except Exception:
+                pass
+
+        w.events.closed += _on_closed
+        webview.start()
+    except Exception:
+        url = "http://127.0.0.1:5000/"
+        try:
+            webbrowser.open(url)
+        except Exception as e:
+            logger.warning(f"Unable to automatically open browser: {e}")
+        app.run(host="127.0.0.1", port=5000, debug=False)
 
 

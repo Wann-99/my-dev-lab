@@ -1,4 +1,3 @@
-from pp.enums import GPIOEnum, GPIOInPortEnum
 from pp.parallel_program import ParallelProgram
 from pp.settings import RobotSetting
 from pp.core.communication import (
@@ -8,7 +7,6 @@ from pp.core.communication import (
     socket_connected
 )
 from pp.core.robot import (
-    get_io,
     update_object_pool
 )
 from pp.core.basic import (
@@ -26,22 +24,32 @@ class ConvVisionTrigger(ParallelProgram):
         cam_extr_params = '0 0 0 0 0 0'
         obj_name = 'Conveyor-SerialPort-1/Vision'
         recv_text = ''
-        if socket_open(1, '192.168.2.103', 30000) :
-            while True:
-                if get_io(GPIOEnum.SYSTEM,GPIOInPortEnum.GPIO_IN_0 ) == 1 :
-                    if not socket_connected(1) :
-                        print('Loss connection')
-                        break
+        while True:
+            if socket_open(1, '192.168.2.112', 30000) :
+                socket_connect = socket_connected(1)
+                if  socket_connect:
+                    print('Connection success')
+                while socket_connect:
+                    # if get_io(GPIOEnum.SYSTEM,GPIOInPortEnum.GPIO_IN_0 ) == 1 :
                     if not socket_send(1, 'Trigger') :
                         print('Send fail')
                         break
                     recv_text = socket_recv(1)
                     if recv_text != '' :
                         obj_param = split_string(recv_text, ';')
-                        obj_value = get_list(obj_param,4)
+                        obj_value = get_list(obj_param,1)
                         update_object_pool(obj_name,8 ,obj_value, cam_intr_params, cam_extr_params, 'flange')
+                    wait_ms(100)
+            else :
+                self.func_enter_silent_mode()
+        
 
-
-
+    def func_enter_silent_mode(self):
+        """进入静默模式"""
+        print('Loss connection')
+        while not socket_open(1, '192.168.2.112', 30000):
+            if get_system_state(SystemStateEnum.IS_FAULT):
+                clear_fault()
+            wait_ms(30)
 
 

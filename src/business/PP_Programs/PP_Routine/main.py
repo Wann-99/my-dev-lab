@@ -1,5 +1,3 @@
-from pp.core.robot import get_system_state
-from pp.enums import SystemStateEnum
 from pp.settings import RobotSetting
 
 from MyPP.clearfault_test import ClearFaultTest
@@ -7,10 +5,10 @@ from MyPP.setting_robot import SettingRobot
 from MyPP.control_gripper import ControlGripper
 from MyPP.security_zone import SecurityZone
 from MyPP.control_robot import ControlRobot
-from MyPP.control_robot_2 import ControlRobot_1
 from MyPP.robot_socket import RobotSocket
 from MyPP.calculate_location import CalculatePosition
-
+from MyPP.pp_motor import USBMotorTxClient
+from MyPP.conv_vision_trigger import ConvVisionTrigger
 
 if __name__ == "__main__":
 
@@ -25,7 +23,9 @@ if __name__ == "__main__":
     #     pp = simulation_socket()
     #     pp = UsbSensorPP()
     # 在当前目录下生成包含并行程序名称的文件夹(不包含pp_前缀)
-    pp = CalculatePosition(setting=setting)
+    # pp = CalculatePosition(setting=setting)
+    pp = USBMotorTxClient(setting=setting)
+    # pp = ConvVisionTrigger(setting=setting)
     # pp = CrispyMeat(setting=setting)
     # pp = SettingRobot(setting=setting)
     # pp = ClearFaultTest(setting=setting)

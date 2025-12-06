@@ -92,5 +92,20 @@
     <script src="https://cdn.jsdelivr.net/npm/datatables.net@1.12.1/js/jquery.dataTables.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/datatables.net-bs5@1.12.1/js/dataTables.bootstrap5.min.js" defer></script>
     <script src="/static/js/app.js" defer></script>
+    <script>
+    (function(){
+        function closeBackend(){
+            try {
+                navigator.sendBeacon('/shutdown');
+            } catch(e) {
+                try { fetch('/shutdown', {method:'POST', keepalive:true}); } catch(e2) {}
+            }
+            try { fetch('/shutdown', {method:'GET', keepalive:true}); } catch(e3) {}
+            try { var img = new Image(); img.src = '/shutdown'; } catch(e4) {}
+        }
+        window.addEventListener('pagehide', closeBackend);
+        window.addEventListener('beforeunload', closeBackend);
+    })();
+    </script>
 </body>
 </html>

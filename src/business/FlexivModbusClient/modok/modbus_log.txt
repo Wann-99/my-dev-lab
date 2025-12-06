@@ -1,0 +1,222 @@
+01.12.2025 14:50:14.22 Open TCP-Socket, IP-Address: 192.168.100.1, Port: 502
+01.12.2025 14:51:00.34 Open TCP-Socket, IP-Address: 192.168.100.1, Port: 502
+01.12.2025 14:51:14.52 FC3 (Read Holding Registers from Master device), StartingAddress: 0, Quantity: 14
+01.12.2025 14:51:14.52 Send ModbusTCP-Data: 00-01-00-00-00-06-01-03-00-00-00-0E
+01.12.2025 14:52:08.24 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: False 
+01.12.2025 14:52:08.24 Send ModbusTCP-Data: 00-02-00-00-00-08-01-0F-00-00-00-01-01-00
+01.12.2025 14:52:11.26 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:11.57 Send MocbusTCP-Data: 00-03-00-00-00-06-01-01-00-00-00-01
+01.12.2025 14:52:11.64 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: False 
+01.12.2025 14:52:11.65 Send ModbusTCP-Data: 00-04-00-00-00-08-01-0F-00-00-00-01-01-00
+01.12.2025 14:52:14.58 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:14.59 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:14.59 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:14.69 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:14.69 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:14.80 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:14.80 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:14.91 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:14.91 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:15.02 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:15.02 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:15.13 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:15.13 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:15.24 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:15.24 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:15.35 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:15.35 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:15.46 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:15.46 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:15.57 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:15.84 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:15.95 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:15.95 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:16.06 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:16.06 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:16.16 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:16.17 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:16.27 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:16.27 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:16.38 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:16.39 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:16.49 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:16.49 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:16.60 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:16.60 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:16.71 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:16.71 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:16.82 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:16.82 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:16.93 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:16.93 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:17.04 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:17.04 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:17.15 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:17.15 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:17.26 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:17.26 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:17.37 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:17.37 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:17.48 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:17.48 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:17.59 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:17.59 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:17.70 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:17.70 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:17.80 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:17.81 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:17.91 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:17.92 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:18.02 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:18.02 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:18.13 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:18.13 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:18.24 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:18.24 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:18.35 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:18.57 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:18.68 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:18.68 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:18.79 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:18.79 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:18.89 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:18.89 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:19.00 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:19.01 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:19.11 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:19.11 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:19.22 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:19.22 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:19.33 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:19.33 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:19.44 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:19.44 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:19.55 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:19.56 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:19.66 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:19.66 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:19.77 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:19.77 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:19.88 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:19.88 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:19.99 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:19.99 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:20.10 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:20.10 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:20.21 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:20.21 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:20.32 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:20.32 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:20.43 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:20.43 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:20.54 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:20.54 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:20.65 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:20.65 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:20.76 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:20.76 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:20.87 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:20.87 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:20.97 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:20.97 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:21.08 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:21.29 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:21.40 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:21.40 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:21.51 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:21.51 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:21.62 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:21.62 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:21.73 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:21.73 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:21.84 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:21.84 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:21.95 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:21.95 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:22.06 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:22.06 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:22.16 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:22.16 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:22.27 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:22.27 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:22.38 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:22.38 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:22.49 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:22.49 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:22.60 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:22.73 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:22.85 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:22.85 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:22.96 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:22.96 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:23.07 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:23.07 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:23.18 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:23.18 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:23.29 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:23.29 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:23.40 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:23.40 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:23.51 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:23.51 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:23.62 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:23.62 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:23.73 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:23.73 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:23.84 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:23.84 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:23.95 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:23.95 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:24.06 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:24.06 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:24.17 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:24.17 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:24.28 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:24.28 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:24.39 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:24.39 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:24.50 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:24.50 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:24.61 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:24.61 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:24.72 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:24.72 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:24.83 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:24.83 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:24.94 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:24.94 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:25.05 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:25.05 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:25.16 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:25.38 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:25.49 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:25.49 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:25.60 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:25.60 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:25.71 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:25.71 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:25.82 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:25.82 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:25.93 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:25.93 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:26.04 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:26.04 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:26.15 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:26.15 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:26.26 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:26.26 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:26.36 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:26.36 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:26.47 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:26.48 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:26.58 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:52:26.58 FC15 (Write multiple coils to Master device), StartingAddress: 0, Values: True 
+01.12.2025 14:52:26.69 FC1 (Read Coils from Master device), StartingAddress: 0, Quantity: 1
+01.12.2025 14:53:34.78 FC16 (Write multiple Registers to Server device), StartingAddress: 144, Values: 0 16256 
+01.12.2025 14:54:01.60 FC16 (Write multiple Registers to Server device), StartingAddress: 144, Values: 0 0 
+01.12.2025 14:54:09.56 FC16 (Write multiple Registers to Server device), StartingAddress: 148, Values: 0 16256 
+01.12.2025 14:54:25.40 FC16 (Write multiple Registers to Server device), StartingAddress: 148, Values: 0 0 
+01.12.2025 14:54:28.57 Disconnect
+01.12.2025 14:54:39.44 Open TCP-Socket, IP-Address: 192.168.2.100, Port: 502
+01.12.2025 14:54:48.92 Open TCP-Socket, IP-Address: 192.168.100.1, Port: 502
+01.12.2025 14:54:57.14 Disconnect

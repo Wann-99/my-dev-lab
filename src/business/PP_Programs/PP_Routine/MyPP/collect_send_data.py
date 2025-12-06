@@ -48,8 +48,6 @@ class CollectAndSendData(ParallelProgram):
                         Fy = get_system_state(SystemStateEnum.CARTESIAN_FORCE_Y)
                         Fz = get_system_state(SystemStateEnum.CARTESIAN_FORCE_Z)
                         Mx = get_system_state(SystemStateEnum.CARTESIAN_MOMENT_X)
-
-
                         My = get_system_state(SystemStateEnum.CARTESIAN_MOMENT_Y)
                         Mz = get_system_state(SystemStateEnum.CARTESIAN_MOMENT_Z)
                         data_text = join_list(tcpPose, ",")  # 对应PDF的 make text from list
