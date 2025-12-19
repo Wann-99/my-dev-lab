@@ -15,44 +15,49 @@ from datetime import datetime
 import threading
 import urllib.request
 import time
+
+# 设置日志
 logging.basicConfig(
-    level=logging.WARNING,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# Optional: Enable CORS
+# 尝试导入CORS
 try:
     from flask_cors import CORS
-    cors_available = True
-except Exception as e:
-    logger.warning(f"CORS not available: {e}")
-    cors_available = False
+    CORS_AVAILABLE = True
+except ImportError:
+    logger.warning("flask_cors is not installed. CORS will be disabled.")
+    CORS_AVAILABLE = False
 
-# Set template and static folders
-template_folder = os.path.join(os.path.dirname(__file__), "templates")
-# print(f"Template folder path: {template_folder}")
-static_folder = os.path.join(os.path.dirname(__file__), "static")
-
-app = Flask(__name__, template_folder=template_folder, static_folder=static_folder,static_url_path="/static")
-# print(f"Flask is looking for templates in: {app.template_folder}")
-if cors_available:
+# 初始化Flask应用
+app = Flask(__name__, template_folder="templates", static_folder="static", static_url_path="/static")
+if CORS_AVAILABLE:
     CORS(app)
 
-# File upload and result directory
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "result")
+# 配置上传文件夹
+UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', os.path.join(os.path.dirname(__file__), "result"))
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+ALLOWED_EXTENSIONS = {'csv'}
+
+def allowed_file(filename):
+    """检查文件扩展名是否允许"""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 def validate_file_structure(df):
-    """Validate CSV file structure."""
+    """验证CSV文件的结构"""
     required_cols = {"NodeTime", "NodePath", "ProgramTime", "PlanTime"}
     missing_cols = required_cols - set(df.columns)
     if missing_cols:
-        raise ValueError(f"CSV missing columns: {missing_cols}")
+        raise ValueError(f"CSV缺少以下列: {missing_cols}")
     if df.empty:
-        raise ValueError("CSV file is empty")
+        raise ValueError("CSV文件为空")
 
 def name_has_datetime(s: str) -> bool:
+    """检查文件名是否包含日期时间"""
     patterns = [
         r'(?:^|[^0-9])(19|20)\d{2}[-_/.]?(0[1-9]|1[0-2])[-_/.]?(0[1-9]|[12]\d|3[01])(?:[^0-9]|$)',
         r'(?:^|[^0-9])(0[1-9]|[12]\d|3[01])[-_/.]?(0[1-9]|1[0-2])[-_/.]?(19|20)\d{2}(?:[^0-9]|$)',
@@ -67,25 +72,54 @@ def name_has_datetime(s: str) -> bool:
             return True
     return False
 
+# -------------------------------------------------------------------------
+# 核心逻辑：process_node_group
+# -------------------------------------------------------------------------
 def process_node_group(group):
     """
-    NodeTime = 节点累计运行时间
-    支持：
-    - 多行 cycle: max - min
-    - 单行 cycle: next.NodeTime - curr.NodeTime（仅正向）
+    处理每个节点组，计算循环时间和标识周期。
+    规则更新：
+    1. 动态计算采样周期：基于ProgramTime的中位数差值
+    2. 多行数据：CycleTime = Max - Min
+    3. 单行数据：CycleTime = 动态计算出的采样周期
     """
+    # 确保按时间排序
+    group = group.sort_values("ProgramTime").reset_index(drop=True)
 
-    group = group.reset_index(drop=True)
+    # --- 1. 动态计算采样周期 (Dynamic Sampling Rate) ---
+    # 计算相邻两行 ProgramTime 的差值
+    time_diffs = group["ProgramTime"].diff()
+    
+    # 筛选有效的采样间隔：
+    # 必须大于0，且小于0.1秒（假设采样周期不会超过100ms，过滤掉不同周期之间的大停顿）
+    valid_intervals = time_diffs[(time_diffs > 0) & (time_diffs < 0.1)]
+    
+    if not valid_intervals.empty:
+        # 取中位数 (Median) 作为最稳定的采样周期，并保留3位小数
+        # 中位数能有效抵抗偶尔的抖动或异常值
+        calculated_period = round(valid_intervals.median(), 3)
+        # 防止计算出0 (如果精度不够)，最小给0.001
+        sampling_period = max(calculated_period, 0.001)
+    else:
+        # 如果数据极其稀疏，无法计算间隔，则使用默认值
+        sampling_period = 0.005 
 
+    # --- 2. 识别周期 (Cycle Detection) ---
     nt = group["NodeTime"]
     prev = nt.shift(1)
 
     RESET_RATIO = 0.1
     ABS_RESET = 0.05
+    MAX_GAP_SECONDS = 1.0  # 强制切分阈值
 
     prog_diff = group["ProgramTime"].diff()
     positive_diffs = prog_diff[prog_diff > 0]
-    prog_threshold = positive_diffs.median() * 2 if not positive_diffs.empty else float("inf")
+    
+    if not positive_diffs.empty:
+        stat_threshold = positive_diffs.median() * 5
+        prog_threshold = min(stat_threshold, MAX_GAP_SECONDS) if stat_threshold > 0.1 else MAX_GAP_SECONDS
+    else:
+        prog_threshold = MAX_GAP_SECONDS
 
     new_cycle = (
         (nt < prev * (1 - RESET_RATIO)) |
@@ -95,20 +129,21 @@ def process_node_group(group):
 
     group["cycle_id"] = new_cycle.cumsum()
 
-    # 提前计算 next NodeTime（仅正向）
-    group["next_NodeTime"] = group["NodeTime"].shift(-1)
-    group["delta_forward"] = group["next_NodeTime"] - group["NodeTime"]
-
+    # --- 3. 聚合计算 ---
     rows = []
 
     for cid, g in group.groupby("cycle_id"):
         node_path = g["NodePath"].iloc[0]
 
         if len(g) >= 2:
+            # 多行数据：计算极差
             cycle_time = round(g["NodeTime"].max() - g["NodeTime"].min(), 3)
+            # 边缘情况：如果多行数据完全相同，视为单次采样
+            if cycle_time == 0:
+                cycle_time = sampling_period
         else:
-            delta = g["delta_forward"].iloc[0]
-            cycle_time = round(delta, 3) if pd.notna(delta) and delta > 0 else 0.0
+            # 单行数据：使用动态计算出的采样周期
+            cycle_time = sampling_period
 
         rows.append({
             "NodePath": node_path,
@@ -120,11 +155,10 @@ def process_node_group(group):
         })
 
     return pd.DataFrame(rows)
-
-
+# -------------------------------------------------------------------------
 
 def analyze_csv(file_path, save_path):
-    """Analyze CSV file to extract cycle time and related statistics."""
+    """分析CSV文件，提取循环时间和相关统计信息"""
     try:
         dtype_dict = {"NodeTime": float, "ProgramTime": float, "NodePath": str, "PlanTime": float}
         df = pd.read_csv(file_path, dtype=dtype_dict)
@@ -138,16 +172,16 @@ def analyze_csv(file_path, save_path):
                 cycle_summary = process_node_group(group)
                 all_results.append(cycle_summary)
             except Exception as e:
-                logger.error(f"Error processing node path {node_path}: {e}")
+                logger.error(f"处理节点路径 {node_path} 时出错: {e}")
                 continue
 
         if not all_results:
-            raise ValueError("No valid data for analysis")
+            raise ValueError("没有有效数据进行分析")
 
         results = pd.concat(all_results, ignore_index=True)
         results = results.sort_values(["NodePath", "StartProgramTime"]).reset_index(drop=True)
 
-        # Calculate z-scores and anomalies
+        # 计算z-scores和异常检测
         if len(results) > 1:
             mean_cycle = results["CycleTime"].mean()
             std_cycle = results["CycleTime"].std()
@@ -165,21 +199,21 @@ def analyze_csv(file_path, save_path):
 
         summary = (
             results.groupby("NodePath")["CycleTime"]
-            .agg([("CycleCount", "count"), ("AvgTime", "mean"), ("MaxTime", "max"), ("MinTime", "min"),
-                  ("TotalTime", "sum"), ("StdTime", "std")])
+            .agg([
+                ("CycleCount", "count"),
+                ("AvgTime", "mean"),
+                ("MaxTime", "max"),
+                ("MinTime", "min"),
+                ("TotalTime", "sum"),
+                ("StdTime", "std")
+            ])
             .reset_index()
         )
 
-        # 新增 CycleSumTime 计算
-        # 计算每个节点路径的循环时间总和
-        # cycle_sum_time = results.groupby("NodePath")["CycleTime"].sum().reset_index()
-        # cycle_sum_time.rename(columns={"CycleTime": "CycleSumTime"}, inplace=True)
+        # 计算EfficiencyRatio
+        summary["EfficiencyRatio"] = summary["AvgTime"] / summary["MinTime"]
 
-        # 合并到 summary 中
-        # summary = summary.merge(cycle_sum_time, on="NodePath", how="left")
-
-        summary["EfficiencyRatio"] = (summary["AvgTime"] / summary["MinTime"]).fillna(0)
-
+        # 获取最小和最大Cycle ID
         min_indices = results.groupby("NodePath")["CycleTime"].idxmin()
         max_indices = results.groupby("NodePath")["CycleTime"].idxmax()
 
@@ -191,7 +225,7 @@ def analyze_csv(file_path, save_path):
 
         summary = summary.fillna({"MinCycleID": -1, "MaxCycleID": -1})
 
-        # Save results to Excel
+        # 保存结果到Excel
         with pd.ExcelWriter(save_path, engine='xlsxwriter') as writer:
             results.to_excel(writer, sheet_name="Cycle_Details", index=False)
             summary.to_excel(writer, sheet_name="Summary", index=False)
@@ -200,32 +234,22 @@ def analyze_csv(file_path, save_path):
         return results, summary, anomalies
 
     except Exception as e:
-        logger.error(f"Error analyzing CSV: {e}")
+        logger.error(f"分析CSV时出错: {e}")
         raise
 
-def generate_charts(results, summary, anomalies):
-    """Generate line, box, and scatter charts."""
+def generate_charts(results, anomalies):
+    """生成折线图、箱型图和散点图"""
     try:
         pio.templates.default = "plotly_white"
 
-        # Check if 'NodePathDisplay' exists in anomalies, if not, fall back to 'NodePath'
-        if 'NodePathDisplay' not in anomalies.columns:
-            logger.warning("'NodePathDisplay' column is missing in anomalies. Using 'NodePath' as fallback.")
-            anomalies['NodePathDisplay'] = anomalies['NodePath']  # Fallback to 'NodePath'
-
-        # Check if 'NodePathDisplay' is also missing in results, fallback if necessary
         if 'NodePathDisplay' not in results.columns:
-            logger.warning("'NodePathDisplay' column is missing in results. Using 'NodePath' as fallback.")
-            results['NodePathDisplay'] = results['NodePath']  # Fallback to 'NodePath'
+            results['NodePathDisplay'] = results['NodePath']
+        if 'NodePathDisplay' not in anomalies.columns and not anomalies.empty:
+            anomalies['NodePathDisplay'] = anomalies['NodePath']
 
-        # Log DataFrames for debugging
-        logger.debug(f"Results DataFrame (with NodePathDisplay): {results.head()}")
-        logger.debug(f"Anomalies DataFrame (with NodePathDisplay): {anomalies.head()}")
-
-        # results['StartProgramTime'] = pd.to_datetime(results['StartProgramTime'])
         results = results.sort_values('StartProgramTime')
 
-        # Line chart generation (same as before)
+        # 折线图
         line_fig = go.Figure()
         unique_nodes = results['NodePathDisplay'].unique()
 
@@ -239,10 +263,12 @@ def generate_charts(results, summary, anomalies):
                 visible=True if idx == 0 else 'legendonly',
                 line=dict(width=2),
                 marker=dict(size=6),
-                hovertemplate="<b>%{fullData.name}</b><br>" +
-                              "节点路径: %{x}<br>" +
-                              "循环时间: %{y:.3f}秒<br>" +
-                              "<extra></extra>"
+                hovertemplate=(
+                    f"<b>{node}</b><br>"
+                    "计划时间: %{x}<br>"
+                    "循环时间: %{y:.3f}秒<br>"
+                    "<extra></extra>"
+                )
             ))
 
         dropdown_buttons = [
@@ -271,10 +297,16 @@ def generate_charts(results, summary, anomalies):
             )]
         )
 
-        config = {'displayModeBar': True, 'displaylogo': False, 'modeBarButtonsToRemove': ['lasso2d', 'select2d'], 'responsive': True, 'scrollZoom': True}
+        config = {
+            'displayModeBar': True,
+            'displaylogo': False,
+            'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
+            'responsive': True,
+            'scrollZoom': True
+        }
         line_html = pio.to_html(line_fig, full_html=False, include_plotlyjs=False, config=config)
 
-        # Box chart generation (same as before)
+        # 箱型图
         box_fig = px.box(results, x="NodePathDisplay", y="CycleTime", points="all", title="各节点循环时间分布（箱型图）")
         box_fig.update_layout(
             xaxis_title="节点路径",
@@ -285,21 +317,18 @@ def generate_charts(results, summary, anomalies):
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)'
         )
-
         box_html = pio.to_html(box_fig, full_html=False, include_plotlyjs=False, config=config)
 
-        # Scatter chart for anomalies
-        if anomalies is not None and not anomalies.empty:
-            # anomalies['StartProgramTime'] = pd.to_datetime(anomalies['StartProgramTime'])
+        # 散点图
+        if not anomalies.empty:
             scatter_fig = px.scatter(
                 anomalies,
                 x="StartProgramTime",
                 y="CycleTime",
-                color="NodePathDisplay",  # Now safe to use NodePathDisplay
+                color="NodePathDisplay",
                 title="异常循环点",
                 size_max=10
             )
-
             scatter_fig.update_layout(
                 xaxis_title="程序开始时间",
                 yaxis_title="循环时间 (秒)",
@@ -309,38 +338,33 @@ def generate_charts(results, summary, anomalies):
                 plot_bgcolor='rgba(0,0,0,0)',
                 paper_bgcolor='rgba(0,0,0,0)'
             )
-
             scatter_html = pio.to_html(scatter_fig, full_html=False, include_plotlyjs=False, config=config)
         else:
-            scatter_html = '<div class="-info text-center">无异常数据</div>'
+            scatter_html = '<div class="info text-center">无异常数据</div>'
 
         return line_html, box_html, scatter_html
 
     except Exception as e:
-        logger.error(f"Error generating charts: {e}")
+        logger.error(f"生成图表时出错: {e}")
         raise
-
-
-
 
 @app.route("/", methods=["GET"])
 def index():
     return render_template("index.html")
 
 @app.route('/static/css/<path:filename>')
-def css_files(filename):
-    return send_from_directory(os.path.join(static_folder, 'css'), filename)
+def serve_css(filename):
+    return send_from_directory(os.path.join(app.static_folder, 'css'), filename)
 
 @app.route('/static/js/<path:filename>')
-def js_files(filename):
-    return send_from_directory(os.path.join(static_folder, 'js'), filename)
-
+def serve_js(filename):
+    return send_from_directory(os.path.join(app.static_folder, 'js'), filename)
 
 @app.route("/favicon.ico")
 def favicon():
-    return send_from_directory(static_folder, 'favicon.ico')
+    return send_from_directory(app.static_folder, 'favicon.ico')
 
-@app.route('/shutdown', methods=['GET','POST'])
+@app.route('/shutdown', methods=['GET', 'POST'])
 def shutdown():
     func = request.environ.get('werkzeug.server.shutdown')
     if func is None:
@@ -354,16 +378,17 @@ def shutdown():
             pass
     threading.Thread(target=_exit, daemon=True).start()
     return jsonify({"status": "shutting down"})
+
 @app.route("/api/analyze", methods=["POST"])
 def api_analyze():
     uploaded_file = request.files.get("csvFile")
-    if not uploaded_file or not uploaded_file.filename.lower().endswith(".csv"):
-        return jsonify({"error": "Please upload a CSV file"}), 400
+    if not uploaded_file or not allowed_file(uploaded_file.filename):
+        return jsonify({"error": "请上传一个有效的CSV文件"}), 400
 
     try:
         filename = secure_filename(uploaded_file.filename)
         if not filename:
-            return jsonify({"error": "Invalid file name"}), 400
+            return jsonify({"error": "无效的文件名"}), 400
 
         file_id = str(uuid.uuid4())
         safe_basename = filename.rsplit(".", 1)[0]
@@ -374,23 +399,19 @@ def api_analyze():
         excel_path = os.path.join(UPLOAD_FOLDER, excel_filename)
 
         os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
         uploaded_file.save(csv_path)
-        logger.debug(f"File saved: {csv_path}")
+        logger.info(f"文件已保存: {csv_path}")
 
-        # Process the CSV
         results, summary, anomalies = analyze_csv(csv_path, excel_path)
-        line_html, box_html, scatter_html = generate_charts(results, summary, anomalies)
+        line_html, box_html, scatter_html = generate_charts(results, anomalies)
 
-        # Generate the HTML tables
-        results_table_html = results.drop(columns=["NodePath", "DeltaTime", "DeltaRate"], errors="ignore").rename(
-            columns={"NodePathDisplay": "NodePath", "DeltaTimeDisplay": "DeltaTime", "DeltaRateDisplay": "DeltaRate"}
+        results_table_html = results.drop(columns=["NodePath"], errors="ignore").rename(
+            columns={"NodePathDisplay": "NodePath"}
         ).to_html(classes="table table-striped table-bordered nowrap", index=False, escape=False, table_id="resultsTable")
 
-        summary_display = summary.rename(columns={"NodePathDisplay": "NodePath"})
-        summary_display["MinCycleID"] = summary_display["MinCycleID"].apply(lambda x: int(x) if x >= 0 else "N/A")
-        summary_display["MaxCycleID"] = summary_display["MaxCycleID"].apply(lambda x: int(x) if x >= 0 else "N/A")
-        # summary_display["CycleSumTime"] = summary_display["CycleSumTime"].round(4)
+        summary_display = summary.rename(columns={"NodePath": "NodePathDisplay"})
+        summary_display["MinCycleID"] = summary_display["MinCycleID"].apply(lambda x: int(x) if isinstance(x, (int, float)) and x >= 0 else "N/A")
+        summary_display["MaxCycleID"] = summary_display["MaxCycleID"].apply(lambda x: int(x) if isinstance(x, (int, float)) and x >= 0 else "N/A")
 
         summary_table_html = summary_display.to_html(
             classes="table table-striped table-bordered nowrap", index=False, escape=False, table_id="summaryTable"
@@ -408,6 +429,7 @@ def api_analyze():
             "anomalies_table_html": anomalies_table_html,
             "line_chart_html": line_html,
             "box_chart_html": box_html,
+            "scatter_chart_html": scatter_html,
             "download_link": download_link,
             "excel_filename": excel_filename
         }
@@ -419,48 +441,37 @@ def api_analyze():
 
     except ValueError as ve:
         logger.error(f"ValueError: {ve}")
-        return jsonify({"error": f"Validation error: {str(ve)}"}), 400
+        return jsonify({"error": f"验证错误: {str(ve)}"}), 400
     except Exception as e:
-        logger.error(f"Error processing file: {e}")
-        return jsonify({"error": f"Failed to process file: {str(e)}"}), 500
-
+        logger.error(f"处理文件时出错: {e}")
+        return jsonify({"error": f"处理文件失败: {str(e)}"}), 500
 
 @app.route("/download/<path:filename>", methods=["GET"])
 def download_file(filename):
     try:
         return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=True)
     except Exception as e:
-        logger.error(f"File download failed: {e}")
-        return jsonify({"error": "File download failed"}), 500
+        logger.error(f"文件下载失败: {e}")
+        return jsonify({"error": "文件下载失败"}), 500
 
-def _start_server():
+def start_server():
     app.run(host="127.0.0.1", port=5000, debug=False, use_reloader=False)
 
 if __name__ == "__main__":
     try:
         import webview
-        t = threading.Thread(target=_start_server, daemon=True)
-        t.start()
-        w = webview.create_window('Robot Beat Analysis', 'http://127.0.0.1:5000/')
-
-        def _on_closed():
+        server_thread = threading.Thread(target=start_server, daemon=True)
+        server_thread.start()
+        window = webview.create_window('Robot Beat Analysis', 'http://127.0.0.1:5000/')
+        def on_closed():
             try:
                 urllib.request.urlopen('http://127.0.0.1:5000/shutdown')
-            except Exception:
-                pass
-            try:
                 os._exit(0)
             except Exception:
                 pass
-
-        w.events.closed += _on_closed
+        window.events.closed += on_closed
         webview.start()
     except Exception:
         url = "http://127.0.0.1:5000/"
-        try:
-            webbrowser.open(url)
-        except Exception as e:
-            logger.warning(f"Unable to automatically open browser: {e}")
-        app.run(host="127.0.0.1", port=5000, debug=False)
-
-
+        webbrowser.open(url)
+        start_server()
