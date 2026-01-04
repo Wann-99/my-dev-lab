@@ -30,3 +30,7 @@ src/logs/
 libs/*.pyd
 MainLogger/
 /src/business/clac_beat/result/
+
+/src/business/PP_Programs/PP_Routine/calculate_position/
+/src/business/PP_Programs/PP_Routine/conv_vision_trigger/
+/src/business/PP_Programs/PP_Routine/motor/

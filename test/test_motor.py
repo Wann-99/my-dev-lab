@@ -1,139 +1,214 @@
+from typing import Optional
+import serial
 import time
-import math
-
-from pp.parallel_program import ParallelProgram
-from pp.settings import RobotSetting
-from pp.enums import (
-    BaudRateEnum,
-    PartityEnum,
-    DataBitsEnum,
-    StopBitsEnum,
-)
-from pp.core.basic import (
-    concat_string,
-    to_string,
-    to_number,
-)
-from pp.core.communication import(
-    serial_port_close,
-    serial_port_open,
-    serial_port_recv,       
-    serial_port_send,
-)
 
 
-
-class USBMotorTxClient(ParallelProgram):
-    
-    
-
-    def __init__(self, setting: RobotSetting = RobotSetting()):
-        super().__init__(setting=setting)
-
-        self.FRAME_HEADER = 0x3E
-        self.SINGLE_TURN_CMD_V1 = 0xA5
-        self.SINGLE_TURN_CMD_V2 = 0xA6
-        self.READ_SINGLE_ANGLE_CMD = 0x94
-        self.SET_ZERO_POINT_CMD = 0x19
-        self.INCREMENTAL_POS_CMD_V2 = 0xA8
-        self.DEFAULT_MOTOR_ID = 0x01
-        self.MAX_SPEED = 600000
-        self.SPEED = 50
-        self.RUNNING = 0x88
-
-    def pp_motor(self):
-        connected = self.func_connect()
-        if connected:
-            #设置零点
-            # serial_port_send(1, [0x3E, 0x19, 0x01, 0x00, 0x58])
-            # 运行
-            # serial_port_send(1,  [0x3E, 0x88, 0x01, 0x00, 0xC7])
-            # 发送角度指令
-            # serial_port_send(1, [0x3E, 0xA5, 0x01, 0x04, 0xE8, 0x01, 0x1E, 0x46, 0x00, 0x65])
-            # print([0x3E, 0xA5, 0x01, 0x04, 0xE8, 0x00, 0x1E, 0x46, 0x00, 0x64])
-            # resp = serial_port_recv(1, 16)
-            # print(resp)
-            cmd_list = self.func_send_angle(180.0, 0xE1)
-            print(cmd_list)
-            serial_port_send(1, cmd_list)
-            resp = serial_port_recv(1, 16)
-            print(resp)
-
-            # self.func_DEC_to_HEX(180)
-            serial_port_close(1)
+class TxCmdEnum:
+    TRANSPORT_WEIGH_485_TO_TX = "TRANSPORT_WEIGH_485_TO_TX"
 
 
-
-    def func_connect(self):
-        if serial_port_open(
-            1,
-            "/dev/serusb2",
-            BaudRateEnum.BAUD_115200,
-            PartityEnum.NONE,
-            DataBitsEnum.BIT_8,
-            StopBitsEnum.BIT_1,
-        ):
-            print("Motor connection successful")
-            return True
-        print("Motor connection failed")
-        serial_port_close(1)
-        return False
-
-
-
-    def func_send_angle(self, angle: float, direction: int):
-        """ send angle to motor
-        :param angle:
+class TxClient:
+    def __init__(self, serial_port: str, baudrate: int = 115200, timeout: float = 2.0):
         """
+        初始化串口客户端，模拟RS485硬件通信
+        :param serial_port: 串口名称，如Windows的"COM3"，Linux的"/dev/ttyUSB0"
+        :param baudrate: 波特率，默认115200（协议默认值）
+        :param timeout: 串口超时时间
+        """
+        self.ser = serial.Serial(
+            port=serial_port,
+            baudrate=baudrate,
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            timeout=timeout
+        )
+        self.timeout = timeout
 
-        if not (0.0 <= angle <= 359.99):
-            print("角度需在0~359.99范围内")
+    def send_and_wait(self, cmd: str, payload: bytes, expected_length: Optional[int] = None, timeout: Optional[float] = None) -> bytes:
+        self.ser.reset_input_buffer()
+        self.ser.reset_output_buffer()
+        self.ser.write(payload)
+        time.sleep(0.001)
+        start_time = time.time()
+        deadline = start_time + (self.timeout if timeout is None else timeout)
+        received = b""
+        while time.time() < deadline:
+            waiting = self.ser.in_waiting
+            if waiting > 0:
+                if expected_length:
+                    to_read = min(waiting, max(0, expected_length - len(received)))
+                    if to_read > 0:
+                        received += self.ser.read(to_read)
+                    if len(received) >= expected_length:
+                        break
+                else:
+                    received += self.ser.read(waiting)
+            else:
+                time.sleep(0.001)
+        return received
 
-        # 1. 构造帧[0]~[4]
-        frame_list = []
-        
-        frame_header_num = to_number("0x3E", NumberFormatEnum.DEC)
-        single_turn_cmd_v1_num = to_number("0xA5", NumberFormatEnum.DEC)
-        default_motor_id_num = to_number("0x01", NumberFormatEnum.DEC)
-        data_len_num = to_number("0x04", NumberFormatEnum.DEC)
-        append_list(frame_list,frame_header_num)
-        append_list(frame_list,single_turn_cmd_v1_num)
-        append_list(frame_list,default_motor_id_num)
-        append_list(frame_list,data_len_num)
-        sum_num = frame_header_num + single_turn_cmd_v1_num + default_motor_id_num + data_len_num
-        # sum_num = sum_num & 0xFF
-        sum_str = concat_string("0x", to_string(sum_num, NumberFormatEnum.HEX)) 
-        low_sum_str = concat_string("0x", to_string(to_number(sum_str, NumberFormatEnum.HEX) % 256, NumberFormatEnum.HEX))
-        low_sum_str_num = to_number(low_sum_str, NumberFormatEnum.DEC)
-        append_list(frame_list,low_sum_str_num)
-       
-        
+    def close(self):
+        if self.ser.is_open:
+            self.ser.close()
 
-        # 2. 构造DATA[0]~DATA[3]
-        direction_str = concat_string("0x", to_string(direction, NumberFormatEnum.HEX))
-        angle_str = concat_string("0x", to_string(angle, NumberFormatEnum.HEX))
-        low_angle_str = concat_string("0x", to_string(to_number(angle_str, NumberFormatEnum.HEX) % 256, NumberFormatEnum.HEX))
-        high_angle_str = concat_string("0x", to_string(math.floor(to_number(angle_str, NumberFormatEnum.HEX) /256), NumberFormatEnum.HEX))
-        
-        direction_num = to_number(direction_str, NumberFormatEnum.DEC)
-        low_angle_num = to_number(low_angle_str, NumberFormatEnum.DEC)
-        high_angle_num = to_number(high_angle_str, NumberFormatEnum.DEC)
-        
-        # data_list = []
-        append_list(frame_list,direction_num)
-        append_list(frame_list,low_angle_num)
-        append_list(frame_list,high_angle_num)
-        append_list(frame_list,0x00)  # DATA[3]：NULL
-        sum_data = angle + direction + 0x00
-        # sum_data = sum_data & 0xFF
-        sum_data_str = concat_string("0x", to_string(sum_data, NumberFormatEnum.HEX)) 
-        low_sum_data_str = concat_string("0x", to_string(to_number(sum_data_str, NumberFormatEnum.HEX) % 256, NumberFormatEnum.HEX))
-        low_sum_data_num = to_number(low_sum_data_str, NumberFormatEnum.DEC)
-        append_list(frame_list,low_sum_data_num)
-        # print(type(frame_list))
-        # 3. 计算数据校验和（DATA[0]~DATA[3]的和）
-        # data_sum = sum(data_list) & 0xFF  # 取低8位
-        # append_list(data_list,data_sum)  # DATA[4]：校验字节
-        return frame_list
+def to_hex(b: bytes) -> str:
+    return " ".join(f"{x:02X}" for x in b)
 
-    
+
+FRAME_HEADER = 0x3E
+SINGLE_TURN_CMD_V2 = 0xA6
+READ_SINGLE_ANGLE_CMD = 0x94
+SET_ZERO_POINT_CMD = 0x19
+DEFAULT_MOTOR_ID = 1
+MAX_SPEED = 60000
+REDUCTION = 8
+SPEED = 50
+
+
+class TxRS485MotorExecute:
+    def __init__(self, tx_client: TxClient):
+        self.tx_client = tx_client
+
+    def sendSingleTurnPositionCommandV2_full(self, motorId: int, clockwise: bool, targetAngle: float, speedPercentage: int) -> None:
+        if motorId < 0x01 or motorId > 0x20:
+            raise ValueError("Invalid motor ID (1-32)")
+        if speedPercentage < 0 or speedPercentage > 100:
+            raise ValueError("Speed percentage must be 0-100")
+        if targetAngle < 0.0 or targetAngle > 359.99:
+            raise ValueError("Target angle must be 0-359.99")
+
+        frame_cmd = bytearray(5)
+        frame_cmd[0] = FRAME_HEADER
+        frame_cmd[1] = SINGLE_TURN_CMD_V2
+        frame_cmd[2] = motorId & 0xFF
+        frame_cmd[3] = 0x08
+        frame_cmd[4] = self._checksum(frame_cmd, 0, 4)
+
+        frame_data = bytearray(9)
+        frame_data[0] = 0x00 if clockwise else 0x01
+        angle_control = int(targetAngle * REDUCTION * 100)
+        frame_data[1] = angle_control & 0xFF
+        frame_data[2] = (angle_control >> 8) & 0xFF
+        frame_data[3] = (angle_control >> 16) & 0xFF
+        max_speed = int(MAX_SPEED * (float(speedPercentage) / 100.0))
+        frame_data[4] = max_speed & 0xFF
+        frame_data[5] = (max_speed >> 8) & 0xFF
+        frame_data[6] = (max_speed >> 16) & 0xFF
+        frame_data[7] = (max_speed >> 24) & 0xFF
+        frame_data[8] = self._checksum(frame_data, 0, 8)
+
+        full_command = bytes(frame_cmd + frame_data)
+        print(f"TX: {to_hex(full_command)}")
+        rx = self.tx_client.send_and_wait(TxCmdEnum.TRANSPORT_WEIGH_485_TO_TX, full_command)
+        if rx:
+            print(f"RX: {to_hex(rx)}")
+
+
+
+
+
+    def smartReturnToZero(self, motorId: int = DEFAULT_MOTOR_ID) -> None:
+        current_angle = self.readSingleTurnAngle(motorId)
+        clockwise_distance = (360.0 - current_angle) % 360.0
+        if clockwise_distance < current_angle:
+            clockwise = True
+        elif clockwise_distance > current_angle:
+            clockwise = False
+        else:
+            clockwise = current_angle < 180.0
+        self.sendSingleTurnPositionCommandV2_full(motorId, clockwise, 0.0, SPEED)
+
+    def readSingleTurnAngle(self, motorId: int = DEFAULT_MOTOR_ID) -> float:
+        if motorId < 0x01 or motorId > 0x20:
+            raise ValueError("Invalid motor ID (1-32)")
+
+        tx_frame = bytearray(5)
+        tx_frame[0] = FRAME_HEADER
+        tx_frame[1] = READ_SINGLE_ANGLE_CMD
+        tx_frame[2] = motorId & 0xFF
+        tx_frame[3] = 0x00
+        tx_frame[4] = self._checksum(tx_frame, 0, 4)
+
+        rx = self.tx_client.send_and_wait(TxCmdEnum.TRANSPORT_WEIGH_485_TO_TX, bytes(tx_frame), expected_length=10)
+        if len(rx) < 10:
+            raise IOError("Invalid reply length")
+        
+        cmd_sum = self._checksum(rx, 0, 4)
+        if cmd_sum != rx[4]:
+            raise IOError("Frame command checksum error: readSingleTurnAngle")
+        
+        data_sum = self._checksum(rx, 5, 4)
+        if data_sum != rx[9]:
+            raise IOError("Frame data checksum error")
+        
+        raw_value = (rx[5] & 0xFF) | ((rx[6] & 0xFF) << 8) | ((rx[7] & 0xFF) << 16) | ((rx[8] & 0xFF) << 24)
+        return (raw_value * 0.01) / REDUCTION
+
+    def setCurrentPositionAsZeroPoint(self, motorId: int = DEFAULT_MOTOR_ID) -> int:
+        if motorId < 0x01 or motorId > 0x20:
+            raise ValueError("Invalid motor ID (1-32)")
+
+        tx_frame = bytearray(5)
+        tx_frame[0] = FRAME_HEADER
+        tx_frame[1] = SET_ZERO_POINT_CMD
+        tx_frame[2] = motorId & 0xFF
+        tx_frame[3] = 0x00
+        tx_frame[4] = self._checksum(tx_frame, 0, 4)
+
+        rx = self.tx_client.send_and_wait(TxCmdEnum.TRANSPORT_WEIGH_485_TO_TX, bytes(tx_frame), expected_length=7)
+        if len(rx) < 7:
+            raise IOError("Invalid reply length")
+        
+        cmd_sum = self._checksum(rx, 0, 4)
+        if cmd_sum != rx[4]:
+            raise IOError("Frame command checksum error: setCurrentPositionAsZeroPoint")
+        
+        return (rx[5] & 0xFF) | ((rx[6] & 0xFF) << 8)
+
+    def _checksum(self, data: bytes, offset: int, length: int) -> int:
+        s = 0
+        for i in range(offset, offset + length):
+            s += data[i] & 0xFF
+        return s & 0xFF
+
+
+if __name__ == "__main__":
+    # 示例：替换为实际串口名称
+    SERIAL_PORT = "COM4"  # Windows示例，Linux请改为"/dev/ttyUSB0"等
+    try:
+        # 初始化串口客户端
+        tx_client = TxClient(serial_port=SERIAL_PORT)
+        # 初始化电机执行器
+        motor_exec = TxRS485MotorExecute(tx_client)
+        
+        # 1. 读取当前单圈角度
+        # current_angle = motor_exec.readSingleTurnAngle()
+        # print(f"当前电机单圈角度（已换算减速比）: {current_angle:.2f}°")
+        
+        # 2. 智能回零
+        # print("执行智能回零...")
+        # motor_exec.smartReturnToZero()
+        # time.sleep(2)  # 等待电机动作完成
+        # zero_angle = motor_exec.readSingleTurnAngle()
+        # print(f"回零后角度: {zero_angle:.2f}°")
+        
+        # 3. 发送单圈位置指令（顺时针转到45°，速度50%）
+        motor_exec.sendSingleTurnPositionCommandV2_full(DEFAULT_MOTOR_ID, True, 70, 50)
+        time.sleep(0.1)
+        target_angle = motor_exec.readSingleTurnAngle()
+        print(f"到达目标位置后角度: {target_angle:.2f}°")
+        
+        
+        # 5. 设置当前位置为零点（谨慎使用，会写入ROM）
+        # print("设置当前位置为零点...")
+        # zero_encoder = motor_exec.setCurrentPositionAsZeroPoint()
+        # print(f"零点编码器原始值: {zero_encoder}")
+
+    except Exception as e:
+        print(f"运行出错: {str(e)}")
+    finally:
+        # 关闭串口
+        if 'tx_client' in locals():
+            tx_client.close()
+            print("串口已关闭")
