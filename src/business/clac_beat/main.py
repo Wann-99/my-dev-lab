@@ -1,5 +1,4 @@
 import os
-import sys
 import webbrowser
 import logging
 from flask import Flask, request, jsonify, send_from_directory, render_template
