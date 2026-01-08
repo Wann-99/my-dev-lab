@@ -30,7 +30,7 @@ from .subplan_layer_0.plan_get_data import plan_get_data
 
 
 @PLAN
-def plan_catering_2_1_1_251219rc(setting=None) -> Plan:
+def plan_catering_2_1_1_251224rc(setting=None) -> Plan:
     if setting is not None:
         plan = Plan(name="Catering_2-1-1_251219RC", setting=setting)
     else:

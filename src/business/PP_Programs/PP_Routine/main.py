@@ -8,6 +8,7 @@ from MyPP.control_robot import ControlRobot
 from MyPP.robot_socket import RobotSocket
 from MyPP.calculate_location import CalculatePosition
 from MyPP.pp_motor import USBMotorTxClient
+from MyPP.float_2_n16_to_d32_float import Float_2_N16
 from MyPP.conv_vision_trigger import ConvVisionTrigger
 
 if __name__ == "__main__":
@@ -15,7 +16,7 @@ if __name__ == "__main__":
     # 机器人的默认地址是192.168.2.100，可以修改为实际IP地址
     # 如果机器人IP是默认的，则不需要定义RobotSetting对象
 
-    setting = RobotSetting(ip="192.168.2.100")
+    setting = RobotSetting(ip="192.168.100.1")
     # 需继承ParallelProgram类，然后在类中定义函数，函数名必须以pp_开头，类中可以定义多个pp_函数
     # pp程序默认auto_booted为False, auto_looped为False，定义函数时如传入参数，则按照用户定义的参数来配置并行程序
     # 可以添加这两个参数(非必填)
@@ -24,7 +25,8 @@ if __name__ == "__main__":
     #     pp = UsbSensorPP()
     # 在当前目录下生成包含并行程序名称的文件夹(不包含pp_前缀)
     # pp = CalculatePosition(setting=setting)
-    pp = USBMotorTxClient(setting=setting)
+    # pp = USBMotorTxClient(setting=setting)
+    pp = Float_2_N16(setting=setting)
     # pp = ConvVisionTrigger(setting=setting)
     # pp = CrispyMeat(setting=setting)
     # pp = SettingRobot(setting=setting)
