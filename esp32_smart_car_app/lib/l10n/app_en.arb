@@ -1,0 +1,176 @@
+{
+  "appTitle": "RoboCar-A",
+  "@appTitle": {
+    "description": "The title of the application"
+  },
+  "mine": "Mine",
+  "deviceSettings": "Device Settings",
+  "networkConfig": "Network Config",
+  "aboutRoboCar": "About RoboCar-A",
+  "logs": "Logs",
+  "statistics": "Statistics",
+  "logout": "Logout",
+  "admin": "Admin",
+  "id": "ID",
+  "unbound": "Unbound",
+  "language": "Language",
+  "chinese": "Simplified Chinese",
+  "english": "English",
+  "save": "Save",
+  "saved": "Saved",
+  "networkSettings": "Network Settings",
+  "carIpAddress": "Car IP Address",
+  "cameraIpAddress": "Camera IP Address",
+  "discoveredDevices": "Discovered Devices",
+  "motionSettings": "Motion Settings",
+  "maxSpeed": "Max Speed",
+  "patrolSpeed": "Patrol Speed",
+  "obstacleSensitivity": "Obstacle Sensitivity",
+  "rechargeThreshold": "Recharge Threshold",
+  "visionSettings": "Vision Settings",
+  "videoResolution": "Video Resolution",
+  "nightMode": "Night Mode",
+  "aiDetection": "AI Detection",
+  "detectionSensitivity": "Detection Sensitivity",
+  "advancedSettings": "Advanced Settings",
+  "firmwareUpdateOnline": "Firmware Update (Online)",
+  "firmwareUpdateLocal": "Firmware Update (Local)",
+  "factoryReset": "Factory Reset",
+  "rebootDevice": "Reboot Device",
+  "exportLogs": "Export Logs",
+  "distance": "Distance",
+  "mode": "Mode",
+  "manual": "MANUAL",
+  "auto": "AUTO",
+  "high": "High",
+  "medium": "Medium",
+  "low": "Low",
+  "on": "On",
+  "off": "Off",
+  "person": "Person",
+  "pet": "Pet",
+  "all": "All",
+  "confirm": "Confirm",
+  "cancel": "Cancel",
+  "rebootConfirm": "Are you sure you want to reboot the car?",
+  "factoryResetConfirm": "Are you sure you want to factory reset? This will reset all network and motion configurations.",
+  "factoryResetSuccess": "Factory reset successful. Please manually reboot the device to take full effect.",
+  "newFirmwareFound": "New firmware found v{version}",
+  "@newFirmwareFound": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "online": "Online",
+  "offline": "Offline",
+  "snapshotSaved": "Snapshot Saved!",
+  "error": "Error: {message}",
+  "@error": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceOnline": "Device Online",
+  "deviceOffline": "Device Offline",
+  "connectionNormal": "Connection normal, ready to control",
+  "pleaseConnect": "Please connect device to start",
+  "connectDevice": "Connect Device",
+  "disconnectDevice": "Disconnect",
+  "connectionFailed": "Connection failed, please check IP and network",
+  "battery": "Battery",
+  "signal": "Signal",
+  "version": "Version {v}",
+  "@version": {
+    "placeholders": {
+      "v": {
+        "type": "String"
+      }
+    }
+  },
+  "features": "Features",
+  "realtimeControl": "Real-time Control",
+  "realtimeControlDesc": "Low-latency control via network.",
+  "hdVideo": "HD Video",
+  "hdVideoDesc": "First-person view transmission.",
+  "autoNav": "Auto Navigation",
+  "autoNavDesc": "Autonomous obstacle avoidance.",
+  "aiVision": "AI Vision",
+  "aiVisionDesc": "Human recognition and AI algorithms.",
+  "checkUpdate": "Check for Updates",
+  "newVersionAvailable": "New version available",
+  "latestVersion": "Already the latest version",
+  "updateContent": "Update Content:",
+  "later": "Later",
+  "downloadNow": "Download Now",
+  "downloading": "Downloading update package...",
+  "newAppVersionFound": "New version v{version} found",
+  "@newAppVersionFound": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "login": "LOG IN",
+  "register": "SIGN UP",
+  "username": "Username",
+  "password": "Password",
+  "enterUsername": "Please enter username",
+  "enterPassword": "Password must be at least 6 characters",
+  "invalidCredentials": "Invalid username or password",
+  "regDisabled": "Registration disabled in demo version",
+  "dontHaveAccount": "Don't have an account? Register",
+  "alreadyHaveAccount": "Already have an account? Login",
+  "charging": "Charging",
+  "patrolling": "Patrolling",
+  "alarm": "Alarm",
+  "pleaseConnectFirst": "Please connect device first",
+  "rebooting": "Reboot command sent",
+  "factoryResetTitle": "Reset Success",
+  "gotIt": "Got it",
+  "sendingConfig": "Sending configuration...",
+  "wifiConfigSuccess": "Success! Device restarting...",
+  "wifiConfigFailed": "Failed: {status}",
+  "@wifiConfigFailed": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "wifiConfigTip": "Connect to 'RoboCar-A-Config' WiFi if not already connected.",
+  "deviceIpDefault": "Device IP (Default: 192.168.4.1)",
+  "wifiSsid": "WiFi SSID",
+  "wifiPassword": "WiFi Password",
+  "home": "Home",
+  "navigation": "Navigation",
+  "control": "Control",
+  "navDeveloping": "Navigation feature under development...",
+  "connectWarning": "Connection Warning",
+  "offlineWarning": "Device is offline. Please connect on Home page before control.",
+  "startControl": "Start Control",
+  "updateNote": "Note: Do not power off or disconnect network during update.",
+  "otaCommandSent": "OTA command sent",
+  "localOtaConfirm": "Confirm local firmware update?\nFile: {file}\nSize: {size} MB\n\nNote: Ensure phone and device are on same WiFi.",
+  "@localOtaConfirm": {
+    "placeholders": {
+      "file": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "localOtaStarted": "Local OTA started",
+  "running": "Running",
+  "selectFile": "Select File",
+  "batteryLow": "Battery<20%",
+  "remoteControlSettings": "Remote Control Settings",
+  "remoteMode": "Remote Mode",
+  "relayServerAddress": "Relay Server Address"
+}

@@ -1,0 +1,15 @@
+menu "Smart Car Configuration"
+
+    config ESP_WIFI_SSID
+        string "WiFi SSID"
+        default "Tenda_WLAN"
+
+    config ESP_WIFI_PASSWORD
+        string "WiFi Password"
+        default "Wj_990518."
+
+    config ESP_MAXIMUM_RETRY
+        int "Maximum retry"
+        default 5
+
+endmenu
