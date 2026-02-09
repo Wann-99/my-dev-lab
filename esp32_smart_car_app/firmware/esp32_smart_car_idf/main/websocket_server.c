@@ -17,6 +17,80 @@
 static const char *TAG = "websocket_server";
 static httpd_handle_t g_server = NULL;
 
+void handle_car_command(const char* payload)
+{
+    cJSON *root = cJSON_Parse(payload);
+    if (root) {
+        cJSON *cmd = cJSON_GetObjectItem(root, "cmd");
+        if (cmd && cJSON_IsString(cmd)) {
+            if (strcmp(cmd->valuestring, "move") == 0) {
+                float vx = 0, vy = 0, vw = 0;
+                cJSON *j_vx = cJSON_GetObjectItem(root, "vx");
+                cJSON *j_vy = cJSON_GetObjectItem(root, "vy");
+                cJSON *j_vw = cJSON_GetObjectItem(root, "vw");
+                if (j_vx) vx = j_vx->valuedouble;
+                if (j_vy) vy = j_vy->valuedouble;
+                if (j_vw) vw = j_vw->valuedouble;
+                
+                ESP_LOGI(TAG, "CMD: move vx=%.2f vy=%.2f vw=%.2f", vx, vy, vw);
+                move_car(vx, vy, vw);
+            } else if (strcmp(cmd->valuestring, "servo") == 0) {
+                int channel = 0;
+                float angle = 0;
+                cJSON *j_channel = cJSON_GetObjectItem(root, "channel");
+                cJSON *j_angle = cJSON_GetObjectItem(root, "angle");
+                if (j_channel) channel = j_channel->valueint;
+                if (j_angle) angle = j_angle->valuedouble;
+                
+                pca9685_set_servo_angle(channel, angle);
+            } else if (strcmp(cmd->valuestring, "servo_step") == 0) {
+                int channel = 0;
+                float step = 0;
+                cJSON *j_channel = cJSON_GetObjectItem(root, "channel");
+                cJSON *j_step = cJSON_GetObjectItem(root, "step");
+                if (j_channel) channel = j_channel->valueint;
+                if (j_step) step = j_step->valuedouble;
+                
+                float speed_angle = (step > 0) ? 95.0 : 85.0; 
+                int duration_ms = abs((int)step) * 20; 
+                
+                pca9685_set_servo_angle(channel, speed_angle);
+                vTaskDelay(pdMS_TO_TICKS(duration_ms));
+                pca9685_stop_servo(channel); 
+            } else if (strcmp(cmd->valuestring, "servo_stop") == 0) {
+                int channel = 0;
+                cJSON *j_channel = cJSON_GetObjectItem(root, "channel");
+                if (j_channel) channel = j_channel->valueint;
+                
+                pca9685_stop_servo(channel);
+            } else if (strcmp(cmd->valuestring, "motor_test") == 0) {
+                int id = 0;
+                int speed = 0;
+                cJSON *j_id = cJSON_GetObjectItem(root, "id");
+                cJSON *j_speed = cJSON_GetObjectItem(root, "speed");
+                if (j_id) id = j_id->valueint;
+                if (j_speed) speed = j_speed->valueint;
+
+                ESP_LOGI(TAG, "CMD: motor_test id=%d speed=%d", id, speed);
+                motor_set_speed(id, speed);
+            } else if (strcmp(cmd->valuestring, "light") == 0) {
+                int val = 0;
+                cJSON *j_val = cJSON_GetObjectItem(root, "val");
+                if (j_val) val = j_val->valueint;
+                set_light(val);
+            } else if (strcmp(cmd->valuestring, "horn") == 0) {
+                int val = 0;
+                cJSON *j_val = cJSON_GetObjectItem(root, "val");
+                if (j_val) val = j_val->valueint;
+                set_horn(val);
+            }
+        }
+        cJSON_Delete(root);
+    } else {
+         ESP_LOGE(TAG, "JSON Parse Error");
+    }
+}
+
 static esp_err_t ws_handler(httpd_req_t *req)
 {
     if (req->method == HTTP_GET) {
@@ -51,82 +125,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
         }
         
         ESP_LOGI(TAG, "Got packet with message: %s", ws_pkt.payload);
-
-        cJSON *root = cJSON_Parse((const char*)ws_pkt.payload);
-        if (root) {
-            cJSON *cmd = cJSON_GetObjectItem(root, "cmd");
-            if (cmd && cJSON_IsString(cmd)) {
-                if (strcmp(cmd->valuestring, "move") == 0) {
-                    float vx = 0, vy = 0, vw = 0;
-                    cJSON *j_vx = cJSON_GetObjectItem(root, "vx");
-                    cJSON *j_vy = cJSON_GetObjectItem(root, "vy");
-                    cJSON *j_vw = cJSON_GetObjectItem(root, "vw");
-                    if (j_vx) vx = j_vx->valuedouble;
-                    if (j_vy) vy = j_vy->valuedouble;
-                    if (j_vw) vw = j_vw->valuedouble;
-                    
-                    ESP_LOGI(TAG, "CMD: move vx=%.2f vy=%.2f vw=%.2f", vx, vy, vw);
-                    move_car(vx, vy, vw);
-                } else if (strcmp(cmd->valuestring, "servo") == 0) {
-                    int channel = 0;
-                    float angle = 0;
-                    cJSON *j_channel = cJSON_GetObjectItem(root, "channel");
-                    cJSON *j_angle = cJSON_GetObjectItem(root, "angle");
-                    if (j_channel) channel = j_channel->valueint;
-                    if (j_angle) angle = j_angle->valuedouble;
-                    
-                    pca9685_set_servo_angle(channel, angle);
-                } else if (strcmp(cmd->valuestring, "servo_step") == 0) {
-                    int channel = 0;
-                    float step = 0;
-                    cJSON *j_channel = cJSON_GetObjectItem(root, "channel");
-                    cJSON *j_step = cJSON_GetObjectItem(root, "step");
-                    if (j_channel) channel = j_channel->valueint;
-                    if (j_step) step = j_step->valuedouble;
-                    
-                    // Logic for 360 Continuous Servo (Simulate Step)
-                    // 90 is Stop. <90 is CW, >90 is CCW.
-                    // We spin at a fixed speed for a duration proportional to step size.
-                    
-                    float speed_angle = (step > 0) ? 95.0 : 85.0; // Slow speed
-                    int duration_ms = abs((int)step) * 20; // 20ms per "degree" unit
-                    
-                    pca9685_set_servo_angle(channel, speed_angle);
-                    vTaskDelay(pdMS_TO_TICKS(duration_ms));
-                    pca9685_stop_servo(channel); // Stop
-                } else if (strcmp(cmd->valuestring, "servo_stop") == 0) {
-                    int channel = 0;
-                    cJSON *j_channel = cJSON_GetObjectItem(root, "channel");
-                    if (j_channel) channel = j_channel->valueint;
-                    
-                    pca9685_stop_servo(channel);
-                } else if (strcmp(cmd->valuestring, "motor_test") == 0) {
-                    int id = 0;
-                    int speed = 0;
-                    cJSON *j_id = cJSON_GetObjectItem(root, "id");
-                    cJSON *j_speed = cJSON_GetObjectItem(root, "speed");
-                    if (j_id) id = j_id->valueint;
-                    if (j_speed) speed = j_speed->valueint;
-
-                    ESP_LOGI(TAG, "CMD: motor_test id=%d speed=%d", id, speed);
-                    motor_set_speed(id, speed);
-                } else if (strcmp(cmd->valuestring, "light") == 0) {
-                    int val = 0;
-                    cJSON *j_val = cJSON_GetObjectItem(root, "val");
-                    if (j_val) val = j_val->valueint;
-                    set_light(val);
-                } else if (strcmp(cmd->valuestring, "horn") == 0) {
-                    int val = 0;
-                    cJSON *j_val = cJSON_GetObjectItem(root, "val");
-                    if (j_val) val = j_val->valueint;
-                    set_horn(val);
-                }
-            }
-            cJSON_Delete(root);
-        } else {
-             ESP_LOGE(TAG, "JSON Parse Error");
-        }
-
+        handle_car_command((const char*)ws_pkt.payload);
         free(buf);
     }
     return ESP_OK;

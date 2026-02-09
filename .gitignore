@@ -34,3 +34,5 @@ MainLogger/
 /src/business/PP_Programs/PP_Routine/calculate_position/
 /src/business/PP_Programs/PP_Routine/conv_vision_trigger/
 /src/business/PP_Programs/PP_Routine/motor/
+# Ignore CSV logs
+*.csv

@@ -70,7 +70,7 @@ if __name__ == "__main__":
     else:
         print("Can't creat csv file...")
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind(('192.168.2.201', 20000))
+    server.bind(('192.168.3.220', 20000))
     server.listen(5)
     print('Wait for connection...')
     while True:

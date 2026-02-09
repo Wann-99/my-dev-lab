@@ -17,29 +17,46 @@ apps = {}
 car_clients = {}
 
 async def connect_to_car(device_id, car_ip):
-    """Connect to the ESP32 car as a client"""
+    """Connect to the ESP32 car as a client with retry mechanism"""
     url = f"ws://{car_ip}:80"
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.ws_connect(url) as ws:
-                car_clients[device_id] = ws
-                logger.info(f"Connected to car {device_id} at {car_ip}")
-                
-                # Forward messages from car to all apps
-                async for msg in ws:
-                    if msg.type == aiohttp.WSMsgType.TEXT:
-                        if device_id in apps:
-                            for app_ws in apps[device_id]:
-                                if not app_ws.closed:
-                                    await app_ws.send_str(msg.data)
-                    elif msg.type == aiohttp.WSMsgType.CLOSED:
-                        break
-    except Exception as e:
-        logger.error(f"Error connecting to car {device_id}: {e}")
-    finally:
-        if device_id in car_clients:
-            del car_clients[device_id]
-        logger.info(f"Disconnected from car {device_id}")
+    retry_count = 0
+    max_retries = 5
+    
+    while retry_count < max_retries:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.ws_connect(url, heartbeat=10.0) as ws:
+                    car_clients[device_id] = ws
+                    logger.info(f"Connected to car {device_id} at {car_ip}")
+                    retry_count = 0 # Reset retry count on success
+                    
+                    # Forward messages from car to all apps
+                    async for msg in ws:
+                        if msg.type == aiohttp.WSMsgType.TEXT:
+                            if device_id in apps:
+                                for app_ws in apps[device_id]:
+                                    if not app_ws.closed:
+                                        await app_ws.send_str(msg.data)
+                        elif msg.type == aiohttp.WSMsgType.CLOSED:
+                            break
+                        elif msg.type == aiohttp.WSMsgType.ERROR:
+                            break
+        except Exception as e:
+            retry_count += 1
+            logger.error(f"Attempt {retry_count} failed to connect to car {device_id}: {e}")
+            if retry_count < max_retries:
+                await asyncio.sleep(2 * retry_count) # Exponential backoff
+            else:
+                logger.error(f"Max retries reached for car {device_id}")
+        finally:
+            if device_id in car_clients:
+                del car_clients[device_id]
+            logger.info(f"Disconnected from car {device_id}")
+            
+        # Check if we should stop retrying (e.g., no apps connected)
+        if device_id not in apps or not apps[device_id]:
+            logger.info(f"Stopping connection attempts for {device_id} as no apps are listening")
+            break
 
 async def ws_handler(request):
     ws = web.WebSocketResponse()
@@ -56,6 +73,12 @@ async def ws_handler(request):
     if role == 'device':
         # This is for when the device connects TO the relay server
         logger.info(f"Device {device_id} registered via push")
+        
+        # Handle existing connection
+        if device_id in devices and not devices[device_id].closed:
+            logger.warning(f"Device {device_id} already connected, closing old one")
+            await devices[device_id].close()
+            
         devices[device_id] = ws
         try:
             async for msg in ws:
@@ -64,8 +87,13 @@ async def ws_handler(request):
                         for app_ws in apps[device_id]:
                             if not app_ws.closed:
                                 await app_ws.send_str(msg.data)
+                elif msg.type == aiohttp.WSMsgType.CLOSED:
+                    break
+                elif msg.type == aiohttp.WSMsgType.ERROR:
+                    break
         finally:
-            del devices[device_id]
+            if devices.get(device_id) == ws:
+                del devices[device_id]
             logger.info(f"Device {device_id} disconnected")
 
     elif role == 'app':

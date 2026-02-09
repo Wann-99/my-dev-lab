@@ -61,6 +61,13 @@ static void event_handler(void* arg, esp_event_base_t event_base,
     }
 }
 
+void wifi_get_device_id(char *buf, size_t len)
+{
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    snprintf(buf, len, "robocar-a-v1-%02x%02x%02x", mac[3], mac[4], mac[5]);
+}
+
 void start_mdns_service()
 {
     esp_err_t err = mdns_init();

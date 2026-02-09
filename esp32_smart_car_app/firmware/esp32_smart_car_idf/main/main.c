@@ -9,6 +9,7 @@
 #include "motor_driver.h"
 #include "pca9685.h"
 #include "websocket_server.h"
+#include "websocket_client.h"
 #include "ultrasonic.h"
 #include "ota_server.h"
 
@@ -109,6 +110,15 @@ void app_main(void)
     websocket_server_init(); // Port 81
     init_ota_server();       // Port 8080 (OTA)
 
+    // Start WebSocket Client (Push Mode) if STA is connected
+    char device_id[32];
+    wifi_get_device_id(device_id, sizeof(device_id));
+    
+    // Load relay server from NVS (default to placeholder if not set)
+    char ws_uri[128];
+    snprintf(ws_uri, sizeof(ws_uri), "ws://192.168.1.10:8081/ws?role=device&deviceId=%s", device_id);
+    websocket_client_init(ws_uri);
+
     ESP_LOGI(TAG, "RoboCar-A Ready! Connect to WS on port 81");
     ESP_LOGI(TAG, "OTA Server Ready! Connect to http://<ip>:8080/update");
 
@@ -177,6 +187,7 @@ void app_main(void)
                  "{\"type\":\"status\",\"dist\":%.1f,\"v_car\":%.2f,\"rssi\":%d}", 
                  distance, v_car, rssi);
         websocket_server_broadcast(json_buf);
+        websocket_client_send(json_buf);
         
         // Heartbeat
         vTaskDelay(pdMS_TO_TICKS(500)); // Update every 500ms

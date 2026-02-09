@@ -16,4 +16,10 @@ void wifi_init_manager(void);
  * @param password Password
  * @return esp_err_t 
  */
-esp_err_t wifi_save_credentials(const char *ssid, const char *password);
+/**
+ * @brief Get the device ID (based on MAC)
+ * 
+ * @param buf Buffer to store ID
+ * @param len Buffer length
+ */
+void wifi_get_device_id(char *buf, size_t len);

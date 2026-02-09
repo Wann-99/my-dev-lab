@@ -3,7 +3,7 @@ import threading
 import time  # 新增时间模块
 
 class TcpServer:
-    def __init__(self, host='192.168.2.206', port=30000):
+    def __init__(self, host='192.168.3.220', port=20000):
         # 初始化服务器参数
         self.host = host      # 服务器监听IP地址
         self.port = port      # 服务器监听端口
