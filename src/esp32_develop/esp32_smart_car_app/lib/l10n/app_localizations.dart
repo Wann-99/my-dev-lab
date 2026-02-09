@@ -835,6 +835,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Battery<20%'**
   String get batteryLow;
+
+  /// No description provided for @remoteControlSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote Control Settings'**
+  String get remoteControlSettings;
+
+  /// No description provided for @remoteMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote Mode'**
+  String get remoteMode;
+
+  /// No description provided for @relayServerAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Relay Server Address'**
+  String get relayServerAddress;
 }
 
 class _AppLocalizationsDelegate

@@ -394,4 +394,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get batteryLow => 'Battery<20%';
+
+  @override
+  String get remoteControlSettings => 'Remote Control Settings';
+
+  @override
+  String get remoteMode => 'Remote Mode';
+
+  @override
+  String get relayServerAddress => 'Relay Server Address';
 }

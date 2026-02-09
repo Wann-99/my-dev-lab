@@ -388,4 +388,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get batteryLow => '电量<20%';
+
+  @override
+  String get remoteControlSettings => '远程控制设置';
+
+  @override
+  String get remoteMode => '远程模式';
+
+  @override
+  String get relayServerAddress => '中转服务器地址';
 }
