@@ -227,14 +227,26 @@ abstract class AppLocalizations {
   /// No description provided for @maxSpeed.
   ///
   /// In en, this message translates to:
-  /// **'Max Speed'**
+  /// **'Max Drive Speed'**
   String get maxSpeed;
 
   /// No description provided for @patrolSpeed.
   ///
   /// In en, this message translates to:
-  /// **'Patrol Speed'**
+  /// **'Auto Cruise Speed'**
   String get patrolSpeed;
+
+  /// No description provided for @steeringSensitivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Steering Sensitivity'**
+  String get steeringSensitivity;
+
+  /// No description provided for @accelSmoothness.
+  ///
+  /// In en, this message translates to:
+  /// **'Acceleration Smoothness'**
+  String get accelSmoothness;
 
   /// No description provided for @obstacleSensitivity.
   ///
@@ -853,6 +865,132 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Relay Server Address'**
   String get relayServerAddress;
+
+  /// No description provided for @videoPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Video Preview'**
+  String get videoPreview;
+
+  /// No description provided for @videoError.
+  ///
+  /// In en, this message translates to:
+  /// **'Video Stream Error'**
+  String get videoError;
+
+  /// No description provided for @emergencyStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Emergency Stop'**
+  String get emergencyStop;
+
+  /// No description provided for @switchToAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to Auto'**
+  String get switchToAuto;
+
+  /// No description provided for @switchToManual.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to Manual'**
+  String get switchToManual;
+
+  /// No description provided for @sensorStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Sensor Status'**
+  String get sensorStatus;
+
+  /// No description provided for @left.
+  ///
+  /// In en, this message translates to:
+  /// **'Left'**
+  String get left;
+
+  /// No description provided for @front.
+  ///
+  /// In en, this message translates to:
+  /// **'Front'**
+  String get front;
+
+  /// No description provided for @right.
+  ///
+  /// In en, this message translates to:
+  /// **'Right'**
+  String get right;
+
+  /// No description provided for @deviceBinding.
+  ///
+  /// In en, this message translates to:
+  /// **'Device Binding'**
+  String get deviceBinding;
+
+  /// No description provided for @boundDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Bound Device'**
+  String get boundDevice;
+
+  /// No description provided for @unbindDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Unbind Device'**
+  String get unbindDevice;
+
+  /// No description provided for @unbindWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the bound account can unbind'**
+  String get unbindWarning;
+
+  /// No description provided for @bindNewDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Bind New Device'**
+  String get bindNewDevice;
+
+  /// No description provided for @bindDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Search and bind nearby RoboCar'**
+  String get bindDescription;
+
+  /// No description provided for @confirmUnbind.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm Unbind'**
+  String get confirmUnbind;
+
+  /// No description provided for @unbindConfirmationMsg.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to unbind this device? Other accounts will be able to bind it.'**
+  String get unbindConfirmationMsg;
+
+  /// No description provided for @searchingDevices.
+  ///
+  /// In en, this message translates to:
+  /// **'Searching for Devices'**
+  String get searchingDevices;
+
+  /// No description provided for @searching.
+  ///
+  /// In en, this message translates to:
+  /// **'Searching...'**
+  String get searching;
+
+  /// No description provided for @noDevicesFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No devices found nearby'**
+  String get noDevicesFound;
+
+  /// No description provided for @bindSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Device bound successfully'**
+  String get bindSuccess;
 }
 
 class _AppLocalizationsDelegate

@@ -72,10 +72,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get motionSettings => 'Motion Settings';
 
   @override
-  String get maxSpeed => 'Max Speed';
+  String get maxSpeed => 'Max Drive Speed';
 
   @override
-  String get patrolSpeed => 'Patrol Speed';
+  String get patrolSpeed => 'Auto Cruise Speed';
+
+  @override
+  String get steeringSensitivity => 'Steering Sensitivity';
+
+  @override
+  String get accelSmoothness => 'Acceleration Smoothness';
 
   @override
   String get obstacleSensitivity => 'Obstacle Sensitivity';
@@ -403,4 +409,68 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get relayServerAddress => 'Relay Server Address';
+
+  @override
+  String get videoPreview => 'Video Preview';
+
+  @override
+  String get videoError => 'Video Stream Error';
+
+  @override
+  String get emergencyStop => 'Emergency Stop';
+
+  @override
+  String get switchToAuto => 'Switch to Auto';
+
+  @override
+  String get switchToManual => 'Switch to Manual';
+
+  @override
+  String get sensorStatus => 'Sensor Status';
+
+  @override
+  String get left => 'Left';
+
+  @override
+  String get front => 'Front';
+
+  @override
+  String get right => 'Right';
+
+  @override
+  String get deviceBinding => 'Device Binding';
+
+  @override
+  String get boundDevice => 'Bound Device';
+
+  @override
+  String get unbindDevice => 'Unbind Device';
+
+  @override
+  String get unbindWarning => 'Only the bound account can unbind';
+
+  @override
+  String get bindNewDevice => 'Bind New Device';
+
+  @override
+  String get bindDescription => 'Search and bind nearby RoboCar';
+
+  @override
+  String get confirmUnbind => 'Confirm Unbind';
+
+  @override
+  String get unbindConfirmationMsg =>
+      'Are you sure you want to unbind this device? Other accounts will be able to bind it.';
+
+  @override
+  String get searchingDevices => 'Searching for Devices';
+
+  @override
+  String get searching => 'Searching...';
+
+  @override
+  String get noDevicesFound => 'No devices found nearby';
+
+  @override
+  String get bindSuccess => 'Device bound successfully';
 }

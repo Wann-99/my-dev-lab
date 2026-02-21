@@ -19,7 +19,9 @@ class MinePage extends StatelessWidget {
       appBar: AppBar(title: Text(l10n.mine), centerTitle: true),
       body: ListView(
         children: [
-          _buildUserHeader(context),
+          _buildUserHeader(context, state),
+          const Divider(),
+          _buildBindingSection(context, state),
           const Divider(),
           _buildMenuItem(context, Icons.settings, l10n.deviceSettings, () {
             Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DeviceSettingsPage()));
@@ -53,27 +55,146 @@ class MinePage extends StatelessWidget {
     );
   }
 
-  Widget _buildUserHeader(BuildContext context) {
+  Widget _buildUserHeader(BuildContext context, CarState state) {
     final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.all(20.0),
       child: Row(
         children: [
-          const CircleAvatar(radius: 40, backgroundColor: Color(0xFF00F0FF), child: Icon(Icons.person, size: 50, color: Colors.black)),
+          const CircleAvatar(
+            radius: 40, 
+            backgroundColor: Color(0xFF00F0FF), 
+            child: Icon(Icons.person, size: 50, color: Colors.black)
+          ),
           const SizedBox(width: 20),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(l10n.admin, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                Text(
+                  state.isBound ? "${l10n.boundDevice}: ${state.deviceId}" : l10n.unbound,
+                  style: TextStyle(color: state.isBound ? Colors.green : Colors.grey),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBindingSection(BuildContext context, CarState state) {
+    final l10n = AppLocalizations.of(context)!;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l10n.deviceBinding, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF00F0FF))),
+          const SizedBox(height: 10),
+          if (state.isBound)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.link_off, color: Colors.red),
+              title: Text(l10n.unbindDevice, style: const TextStyle(color: Colors.red)),
+              subtitle: Text(l10n.unbindWarning, style: const TextStyle(fontSize: 12)),
+              onTap: () => _showUnbindDialog(context, state, l10n),
+            )
+          else
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.add_link, color: Colors.green),
+              title: Text(l10n.bindNewDevice, style: const TextStyle(color: Colors.green)),
+              subtitle: Text(l10n.bindDescription, style: const TextStyle(fontSize: 12)),
+              onTap: () => _showBindDialog(context, state, l10n),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _showUnbindDialog(BuildContext context, CarState state, AppLocalizations l10n) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.confirmUnbind),
+        content: Text(l10n.unbindConfirmationMsg),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(l10n.cancel)),
+          TextButton(
+            onPressed: () {
+              state.unbindDevice();
+              Navigator.pop(context);
+            },
+            child: Text(l10n.confirm, style: const TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showBindDialog(BuildContext context, CarState state, AppLocalizations l10n) {
+    state.startDiscovery();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A2E),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(l10n.admin, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(l10n.searchingDevices, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  if (state.isDiscovering)
+                    const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  else
+                    IconButton(icon: const Icon(Icons.refresh), onPressed: () => state.startDiscovery()),
+                ],
+              ),
+              const SizedBox(height: 20),
               Consumer<CarState>(
                 builder: (context, state, child) {
-                  String displayId = state.deviceId == "Unbound" ? l10n.unbound : state.deviceId;
-                  return Text("${l10n.id}: $displayId", style: const TextStyle(color: Colors.grey));
+                  if (state.discoveredDevices.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 40),
+                      child: Text(state.isDiscovering ? l10n.searching : l10n.noDevicesFound),
+                    );
+                  }
+                  return ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: state.discoveredDevices.length,
+                    itemBuilder: (context, index) {
+                      final device = state.discoveredDevices[index];
+                      return ListTile(
+                        leading: const Icon(Icons.directions_car, color: Color(0xFF00F0FF)),
+                        title: Text(device['id'] ?? 'Unknown Device'),
+                        subtitle: Text("IP: ${device['ip']}"),
+                        onTap: () async {
+                          await state.bindDevice(device['id']!, "Current User");
+                          // Also save the IP for connection
+                          await state.saveAllSettings(newCarIp: device['ip'], newCameraIp: device['ip']);
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(l10n.bindSuccess), backgroundColor: Colors.green),
+                            );
+                            // Auto connect after binding
+                            state.connect();
+                          }
+                        },
+                      );
+                    },
+                  );
                 },
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }

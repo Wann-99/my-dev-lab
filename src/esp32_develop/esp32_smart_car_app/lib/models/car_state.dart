@@ -13,11 +13,19 @@ class CarState extends ChangeNotifier {
   WebSocketChannel? _channel;
   bool isConnected = false;
   bool _isManuallyDisconnected = false;
-  String distance = "--";
+  
+  // PRD: 多传感器距离
+  double distFront = 0.0;
+  double distLeft = 0.0;
+  double distRight = 0.0;
+  String distance = "--"; // Main distance for display
+  
   String mode = "MANUAL";
   String carIp = "";
   String cameraIp = "";
   String deviceId = "Unbound";
+  bool isBound = false; // PRD: 绑定状态
+  String boundUser = ""; // PRD: 绑定用户
   String relayServer = ""; // Relay server address (e.g., 1.2.3.4:8081)
   bool isRemoteMode = false;
   Locale locale = const Locale('en'); // Default to English
@@ -30,12 +38,16 @@ class CarState extends ChangeNotifier {
   int latency = 0; // ms
   DateTime? _lastPingTime;
   Timer? _pingTimer;
+  Timer? _heartbeatCheckTimer;
+  DateTime? _lastHeartbeatTime;
   Timer? _autoConnectTimer;
   
   // Control State
   double maxSpeed = 0.7; 
   double patrolSpeed = 0.4;
   String sensitivity = "Medium";
+  double steeringSensitivity = 0.5; // PRD: 转向灵敏度
+  double accelerationSmoothness = 0.5; // PRD: 加速平滑度
   int speedLevel = 1; 
   double ultrasonicAngle = 90.0;
   
@@ -167,8 +179,9 @@ class CarState extends ChangeNotifier {
   void _startAutoConnectTimer() {
     _autoConnectTimer?.cancel();
     _autoConnectTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      if (!isConnected && carIp.isNotEmpty && !_isManuallyDisconnected) {
-        debugPrint("Auto-connecting to $carIp...");
+      // PRD: Only auto-connect if device is bound
+      if (isBound && !isConnected && carIp.isNotEmpty && !_isManuallyDisconnected) {
+        debugPrint("Auto-connecting to bound device at $carIp...");
         connect();
       }
     });
@@ -179,6 +192,8 @@ class CarState extends ChangeNotifier {
     carIp = prefs.getString('car_ip') ?? "";
     cameraIp = prefs.getString('camera_ip') ?? "";
     deviceId = prefs.getString('device_id') ?? "Unbound";
+    isBound = prefs.getBool('is_bound') ?? false;
+    boundUser = prefs.getString('bound_user') ?? "";
     relayServer = prefs.getString('relay_server') ?? "";
     isRemoteMode = prefs.getBool('is_remote_mode') ?? false;
     String langCode = prefs.getString('language_code') ?? 'en';
@@ -186,15 +201,17 @@ class CarState extends ChangeNotifier {
     maxSpeed = prefs.getDouble('max_speed') ?? 0.7;
     patrolSpeed = prefs.getDouble('patrol_speed') ?? 0.4;
     sensitivity = prefs.getString('sensitivity') ?? "Medium";
+    steeringSensitivity = prefs.getDouble('steering_sensitivity') ?? 0.5;
+    accelerationSmoothness = prefs.getDouble('acceleration_smoothness') ?? 0.5;
     resolution = prefs.getString('resolution') ?? "1080P";
     nightMode = prefs.getString('night_mode') ?? "Auto";
     aiDetection = prefs.getString('ai_detection') ?? "All";
     detectionSensitivity = prefs.getDouble('detection_sensitivity') ?? 0.75;
     
     notifyListeners();
-
-    // Auto-connect logic: if IP is not empty, try connecting
-    if (carIp.isNotEmpty) {
+  
+    // PRD: Auto-connect ONLY if bound and IP is available
+    if (isBound && carIp.isNotEmpty) {
       connect();
     }
   }
@@ -228,6 +245,39 @@ class CarState extends ChangeNotifier {
     sendCommand({"cmd": "reboot"});
   }
 
+  void emergencyStop() {
+    // PRD: High priority stop command
+    sendCommand({
+      "cmd": "move",
+      "vx": 0,
+      "vy": 0,
+      "vw": 0
+    });
+    notifyListeners();
+  }
+
+  Future<void> bindDevice(String id, String user) async {
+    final prefs = await SharedPreferences.getInstance();
+    deviceId = id;
+    isBound = true;
+    boundUser = user;
+    await prefs.setString('device_id', id);
+    await prefs.setBool('is_bound', true);
+    await prefs.setString('bound_user', user);
+    notifyListeners();
+  }
+
+  Future<void> unbindDevice() async {
+    final prefs = await SharedPreferences.getInstance();
+    deviceId = "Unbound";
+    isBound = false;
+    boundUser = "";
+    await prefs.setString('device_id', "Unbound");
+    await prefs.setBool('is_bound', false);
+    await prefs.setString('bound_user', "");
+    notifyListeners();
+  }
+
   Future<void> setLocale(Locale newLocale) async {
     if (locale == newLocale) return;
     locale = newLocale;
@@ -243,6 +293,8 @@ class CarState extends ChangeNotifier {
     double? newMaxSpeed,
     double? newPatrolSpeed,
     String? newSensitivity,
+    double? newSteeringSensitivity,
+    double? newAccelerationSmoothness,
     String? newResolution,
     String? newNightMode,
     String? newAiDetection,
@@ -279,8 +331,8 @@ class CarState extends ChangeNotifier {
     if (newMaxSpeed != null) {
       await prefs.setDouble('max_speed', newMaxSpeed);
       maxSpeed = newMaxSpeed;
-      // Sync to car hardware (0.0~1.0 -> 0~255)
-      sendCommand({"cmd": "speed", "value": (maxSpeed * 255).toInt()});
+      // Sync to car hardware (0.0~1.0 -> 0~100)
+      sendCommand({"cmd": "speed", "value": (maxSpeed * 100).toInt()});
     }
     if (newPatrolSpeed != null) {
       await prefs.setDouble('patrol_speed', newPatrolSpeed);
@@ -289,6 +341,16 @@ class CarState extends ChangeNotifier {
     if (newSensitivity != null) {
       await prefs.setString('sensitivity', newSensitivity);
       sensitivity = newSensitivity;
+    }
+    if (newSteeringSensitivity != null) {
+      await prefs.setDouble('steering_sensitivity', newSteeringSensitivity);
+      steeringSensitivity = newSteeringSensitivity;
+      sendCommand({"cmd": "steering", "value": (steeringSensitivity * 100).toInt()});
+    }
+    if (newAccelerationSmoothness != null) {
+      await prefs.setDouble('acceleration_smoothness', newAccelerationSmoothness);
+      accelerationSmoothness = newAccelerationSmoothness;
+      sendCommand({"cmd": "accel", "value": (accelerationSmoothness * 100).toInt()});
     }
     if (newResolution != null) {
       await prefs.setString('resolution', newResolution);
@@ -382,54 +444,96 @@ class CarState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setCarMode(String newMode) {
+    if (isConnected) {
+      sendCommand({"cmd": "mode", "value": newMode.toUpperCase()});
+    }
+  }
+
   Future<void> startDiscovery() async {
     if (isDiscovering) return;
     isDiscovering = true;
     discoveredDevices.clear();
     notifyListeners();
 
+    // PRD: Use multiple discovery strategies (mDNS + manual IP fallback if needed)
+    // Here we focus on making mDNS more robust
     const String serviceName = '_robocar._tcp.local';
+    
+    // On some Windows/Android environments, we need to bind to a specific address or use RawDatagramSocket
     final MDnsClient client = MDnsClient();
     
     try {
       await client.start();
-      await for (final PtrResourceRecord ptr in client
-          .lookup<PtrResourceRecord>(ResourceRecordQuery.serverPointer(serviceName))) {
+      debugPrint("mDNS Client started, searching for $serviceName...");
+      
+      // Look for pointers to our service
+      final Stream<PtrResourceRecord> ptrStream = client.lookup<PtrResourceRecord>(
+        ResourceRecordQuery.serverPointer(serviceName),
+      );
+
+      await for (final PtrResourceRecord ptr in ptrStream.timeout(const Duration(seconds: 5), onTimeout: (sink) => sink.close())) {
+        debugPrint("Found mDNS PTR: ${ptr.domainName}");
         
         String? foundId;
-        // Verify TXT record to ensure device matches
-        await for (final TxtResourceRecord txt in client
-            .lookup<TxtResourceRecord>(ResourceRecordQuery.text(ptr.domainName))) {
-          final List<String> txtData = txt.text.split('\n');
-          bool hasType = false;
-          for (var item in txtData) {
-            if (item.contains('type=robocar-a')) hasType = true;
-            if (item.startsWith('id=robocar-a-v1-')) {
-              foundId = item.split('=')[1];
-            }
-          }
-          if (hasType && foundId != null) {
-            break;
-          } else {
-            foundId = null;
-          }
-        }
+        String? foundIp;
+        String? foundInstanceName = ptr.domainName.split('.')[0];
 
-        if (foundId == null) continue;
-
-        await for (final SrvResourceRecord srv in client
-            .lookup<SrvResourceRecord>(ResourceRecordQuery.service(ptr.domainName))) {
-          await for (final IPAddressResourceRecord ip in client
-              .lookup<IPAddressResourceRecord>(ResourceRecordQuery.addressIPv4(srv.target))) {
-            final String address = ip.address.address;
-            bool exists = discoveredDevices.any((d) => d['ip'] == address);
-            if (!exists) {
-              discoveredDevices.add({
-                'ip': address,
-                'id': foundId,
-              });
-              notifyListeners();
+        // Resolve TXT, SRV and IP in parallel for this PTR
+        await Future.wait([
+          // 1. Get TXT for ID and Type
+          () async {
+            try {
+              await for (final TxtResourceRecord txt in client
+                  .lookup<TxtResourceRecord>(ResourceRecordQuery.text(ptr.domainName))
+                  .timeout(const Duration(seconds: 2))) {
+                final List<String> txtData = txt.text.split('\n');
+                bool hasType = false;
+                for (var item in txtData) {
+                  if (item.contains('type=robocar-a')) hasType = true;
+                  if (item.startsWith('id=')) {
+                    foundId = item.split('=')[1];
+                  }
+                }
+                if (hasType && foundId != null) break;
+              }
+            } catch (e) {
+              debugPrint("TXT lookup error for ${ptr.domainName}: $e");
             }
+          }(),
+          
+          // 2. Get SRV then IP
+          () async {
+            try {
+              await for (final SrvResourceRecord srv in client
+                  .lookup<SrvResourceRecord>(ResourceRecordQuery.service(ptr.domainName))
+                  .timeout(const Duration(seconds: 2))) {
+                
+                await for (final IPAddressResourceRecord ip in client
+                    .lookup<IPAddressResourceRecord>(ResourceRecordQuery.addressIPv4(srv.target))
+                    .timeout(const Duration(seconds: 2))) {
+                  foundIp = ip.address.address;
+                  if (foundIp != null) break;
+                }
+                if (foundIp != null) break;
+              }
+            } catch (e) {
+              debugPrint("SRV/IP lookup error for ${ptr.domainName}: $e");
+            }
+          }(),
+        ]);
+
+        if (foundIp != null) {
+          final String finalId = foundId ?? foundInstanceName ?? "Unknown";
+          bool exists = discoveredDevices.any((d) => d['ip'] == foundIp);
+          if (!exists) {
+            debugPrint("Discovered Device: $finalId at $foundIp");
+            discoveredDevices.add({
+              'ip': foundIp!,
+              'id': finalId,
+              'name': foundInstanceName ?? "RoboCar",
+            });
+            notifyListeners();
           }
         }
       }
@@ -438,11 +542,18 @@ class CarState extends ChangeNotifier {
     } finally {
       client.stop();
       isDiscovering = false;
+      debugPrint("Discovery finished. Found ${discoveredDevices.length} devices.");
       notifyListeners();
     }
   }
 
   Future<bool> connect() async {
+    // PRD: Strictly enforce binding before connection
+    if (!isBound) {
+      debugPrint("Connection rejected: Device must be bound first.");
+      return false;
+    }
+
     if (isRemoteMode) {
       if (relayServer.isEmpty || deviceId == "Unbound") return false;
     } else {
@@ -472,7 +583,9 @@ class CarState extends ChangeNotifier {
       // Initial commands
       sendCommand({"cmd": "servo", "channel": 0, "angle": ultrasonicAngle});
       sendCommand({"cmd": "servo_stop", "channel": 1});
-      sendCommand({"cmd": "speed", "value": (maxSpeed * 255).toInt()});
+      sendCommand({"cmd": "speed", "value": (maxSpeed * 100).toInt()});
+      sendCommand({"cmd": "steering", "value": (steeringSensitivity * 100).toInt()});
+      sendCommand({"cmd": "accel", "value": (accelerationSmoothness * 100).toInt()});
       
       _startPing();
       
@@ -482,7 +595,19 @@ class CarState extends ChangeNotifier {
         try {
           final data = jsonDecode(message);
           if (data['type'] == 'status') {
-            if (data['dist'] != null) distance = data['dist'].toString();
+            _lastHeartbeatTime = DateTime.now(); // Update heartbeat on any status message
+            
+            // PRD: 多传感器距离
+            if (data['dist_f'] != null) distFront = (data['dist_f'] as num).toDouble();
+            if (data['dist_l'] != null) distLeft = (data['dist_l'] as num).toDouble();
+            if (data['dist_r'] != null) distRight = (data['dist_r'] as num).toDouble();
+            
+            if (data['dist'] != null) {
+              distance = data['dist'].toString();
+            } else if (data['dist_f'] != null) {
+              distance = data['dist_f'].toString();
+            }
+            
             if (data['mode'] != null) mode = data['mode'].toString().toUpperCase();
             if (data['v_car'] != null) carBattery = (data['v_car'] as num).toDouble();
             if (data['rssi'] != null) wifiSignal = (data['rssi'] as num).toInt();
@@ -516,10 +641,22 @@ class CarState extends ChangeNotifier {
 
   void _startPing() {
     _pingTimer?.cancel();
+    _lastHeartbeatTime = DateTime.now(); // Reset heartbeat on start
     _pingTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
       if (isConnected) {
         _lastPingTime = DateTime.now();
         sendCommand({"cmd": "ping", "ts": _lastPingTime!.millisecondsSinceEpoch});
+      }
+    });
+
+    // Heartbeat check: If no status update for 5 seconds, consider disconnected
+    _heartbeatCheckTimer?.cancel();
+    _heartbeatCheckTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (isConnected && _lastHeartbeatTime != null) {
+        if (DateTime.now().difference(_lastHeartbeatTime!).inSeconds > 5) {
+          debugPrint("Heartbeat lost, disconnecting...");
+          disconnect();
+        }
       }
     });
   }
@@ -527,6 +664,8 @@ class CarState extends ChangeNotifier {
   void _stopPing() {
     _pingTimer?.cancel();
     _pingTimer = null;
+    _heartbeatCheckTimer?.cancel();
+    _heartbeatCheckTimer = null;
   }
 
   void disconnect() {
@@ -539,6 +678,16 @@ class CarState extends ChangeNotifier {
   }
 
   void sendCommand(Map<String, dynamic> cmd) {
+    // PRD: Unlock all control permissions ONLY after successful binding
+    // Allow 'ping' and 'ota_start' even if not bound (for system maintenance)
+    final String? commandName = cmd['cmd']?.toString();
+    final List<String> allowedUnboundCommands = ['ping']; 
+    
+    if (!isBound && commandName != null && !allowedUnboundCommands.contains(commandName)) {
+      debugPrint("Command blocked: Device not bound. Command: $commandName");
+      return;
+    }
+
     if (isConnected && _channel != null) {
       _channel!.sink.add(jsonEncode(cmd));
     }

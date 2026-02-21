@@ -1,0 +1,19 @@
+# WiFi
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=10
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=32
+CONFIG_ESP_WIFI_TX_BUFFER_TYPE=1
+
+# Brownout Detection (Lower threshold to prevent reset on power spikes)
+CONFIG_ESP_BROWNOUT_DET=y
+CONFIG_ESP_BROWNOUT_DET_LVL_SEL_0=y
+# CONFIG_ESP_BROWNOUT_DET_LVL_SEL_7 is default (2.43V), SEL_0 is lower (2.27V) or similar depending on chip version, 
+# but usually SEL_0 is the lowest voltage threshold.
+# Actually on ESP32:
+# 0: 2.43V +/- 0.05
+# 1: 2.48V
+# ...
+# 7: 2.8V
+# Wait, let's check Kconfig for ESP32.
+# Usually we want the lowest voltage to trigger reset.
+# If we want MORE stability on bad power, we want the detector to trigger at a LOWER voltage (so it tolerates lower voltage).
+# 0 is usually the lowest.

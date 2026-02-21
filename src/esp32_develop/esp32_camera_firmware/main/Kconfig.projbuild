@@ -1,0 +1,33 @@
+menu "Camera Configuration"
+
+    config ESP_WIFI_SSID
+        string "WiFi SSID"
+        default "myssid"
+        help
+            SSID (network name) for the example to connect to.
+
+    config ESP_WIFI_PASSWORD
+        string "WiFi Password"
+        default "mypassword"
+        help
+            WiFi password (WPA or WPA2) for the example to connect to.
+
+    config ESP_MAXIMUM_RETRY
+        int "Maximum retry"
+        default 5
+        help
+            Maximum number of retries when connecting to WiFi.
+
+    config LED_GPIO
+        int "Flash LED GPIO"
+        default 4
+        help
+            GPIO number for the high-power Flash LED.
+
+    config LED_STATUS_GPIO
+        int "Status LED GPIO"
+        default 33
+        help
+            GPIO number for the status LED (usually red, active low).
+
+endmenu

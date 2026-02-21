@@ -16,9 +16,12 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
   final _carIpController = TextEditingController();
   final _cameraIpController = TextEditingController();
   final _relayServerController = TextEditingController();
+  final _deviceIdController = TextEditingController();
   bool _isRemoteMode = false;
   double _maxSpeed = 0.7;
   double _patrolSpeed = 0.4;
+  double _steeringSensitivity = 0.5;
+  double _accelerationSmoothness = 0.5;
   String _sensitivity = "Medium";
   String _resolution = "1080P";
   String _nightMode = "Auto";
@@ -32,9 +35,12 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
     _carIpController.text = state.carIp;
     _cameraIpController.text = state.cameraIp;
     _relayServerController.text = state.relayServer;
+    _deviceIdController.text = state.deviceId;
     _isRemoteMode = state.isRemoteMode;
     _maxSpeed = state.maxSpeed;
     _patrolSpeed = state.patrolSpeed;
+    _steeringSensitivity = state.steeringSensitivity;
+    _accelerationSmoothness = state.accelerationSmoothness;
     _sensitivity = state.sensitivity;
     _resolution = state.resolution;
     _nightMode = state.nightMode;
@@ -47,6 +53,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
     _carIpController.dispose();
     _cameraIpController.dispose();
     _relayServerController.dispose();
+    _deviceIdController.dispose();
     super.dispose();
   }
 
@@ -58,14 +65,26 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
       newCameraIp: _cameraIpController.text,
       newMaxSpeed: _maxSpeed,
       newPatrolSpeed: _patrolSpeed,
+      newSteeringSensitivity: _steeringSensitivity,
+      newAccelerationSmoothness: _accelerationSmoothness,
       newSensitivity: _sensitivity,
       newResolution: _resolution,
       newNightMode: _nightMode,
       newAiDetection: _aiDetection,
       newDetectionSensitivity: _detectionSensitivity,
       newRelayServer: _relayServerController.text,
+      newDeviceId: _deviceIdController.text,
       newIsRemoteMode: _isRemoteMode,
     );
+
+    // If connected, sync relay config to car
+    if (state.isConnected) {
+      state.sendCommand({
+        "cmd": "set_relay",
+        "url": _relayServerController.text,
+        "id": _deviceIdController.text,
+      });
+    }
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
       ..showSnackBar(
@@ -105,6 +124,8 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
                     _cameraIpController.text = state.cameraIp;
                     _maxSpeed = state.maxSpeed;
                     _patrolSpeed = state.patrolSpeed;
+                    _steeringSensitivity = state.steeringSensitivity;
+                    _accelerationSmoothness = state.accelerationSmoothness;
                     _sensitivity = state.sensitivity;
                     _resolution = state.resolution;
                     _nightMode = state.nightMode;
@@ -338,6 +359,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
                         onPressed: () {
                           setState(() {
                             _carIpController.text = device['ip']!;
+                            _deviceIdController.text = device['id']!;
                             // Auto-fill ID
                             state.saveAllSettings(newDeviceId: device['id']);
                           });
@@ -369,6 +391,19 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
               onChanged: (v) => setState(() => _isRemoteMode = v),
               activeColor: const Color(0xFF00F0FF),
             ),
+            const Divider(height: 1, indent: 16, endIndent: 16, color: Colors.white10),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: TextField(
+                controller: _deviceIdController,
+                decoration: InputDecoration(
+                  labelText: l10n.id, // Using existing "ID" translation
+                  hintText: "e.g. car_01",
+                  prefixIcon: const Icon(Icons.fingerprint, color: Color(0xFF00F0FF)),
+                ),
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
             if (_isRemoteMode) ...[
               const Divider(height: 1, indent: 16, endIndent: 16, color: Colors.white10),
               Padding(
@@ -388,6 +423,10 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage> {
           const SizedBox(height: 20),
           _buildSection(l10n.motionSettings, [
             _buildSliderRow(l10n.maxSpeed, _maxSpeed, (v) => setState(() => _maxSpeed = v)),
+            const Divider(height: 1, indent: 16, endIndent: 16, color: Colors.white10),
+            _buildSliderRow(l10n.steeringSensitivity, _steeringSensitivity, (v) => setState(() => _steeringSensitivity = v)),
+            const Divider(height: 1, indent: 16, endIndent: 16, color: Colors.white10),
+            _buildSliderRow(l10n.accelSmoothness, _accelerationSmoothness, (v) => setState(() => _accelerationSmoothness = v)),
             const Divider(height: 1, indent: 16, endIndent: 16, color: Colors.white10),
             _buildSliderRow(l10n.patrolSpeed, _patrolSpeed, (v) => setState(() => _patrolSpeed = v)),
             const Divider(height: 1, indent: 16, endIndent: 16, color: Colors.white10),

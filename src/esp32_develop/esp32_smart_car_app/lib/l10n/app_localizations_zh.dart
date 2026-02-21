@@ -72,10 +72,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get motionSettings => '运动设置';
 
   @override
-  String get maxSpeed => '最大速度';
+  String get maxSpeed => '最大行驶速度';
 
   @override
-  String get patrolSpeed => '巡逻速度';
+  String get patrolSpeed => '自动巡航速度';
+
+  @override
+  String get steeringSensitivity => '转向灵敏度';
+
+  @override
+  String get accelSmoothness => '加速平滑度';
 
   @override
   String get obstacleSensitivity => '避障灵敏度';
@@ -397,4 +403,67 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get relayServerAddress => '中转服务器地址';
+
+  @override
+  String get videoPreview => '实时监控画面';
+
+  @override
+  String get videoError => '视频流连接失败';
+
+  @override
+  String get emergencyStop => '一键急停';
+
+  @override
+  String get switchToAuto => '切换到自动';
+
+  @override
+  String get switchToManual => '切换到手动';
+
+  @override
+  String get sensorStatus => '传感器状态';
+
+  @override
+  String get left => '左侧';
+
+  @override
+  String get front => '前方';
+
+  @override
+  String get right => '右侧';
+
+  @override
+  String get deviceBinding => '设备绑定机制';
+
+  @override
+  String get boundDevice => '已绑定设备';
+
+  @override
+  String get unbindDevice => '解除绑定';
+
+  @override
+  String get unbindWarning => '仅绑定账号可解绑';
+
+  @override
+  String get bindNewDevice => '绑定新设备';
+
+  @override
+  String get bindDescription => '搜索并绑定附近的 RoboCar';
+
+  @override
+  String get confirmUnbind => '确认解绑';
+
+  @override
+  String get unbindConfirmationMsg => '确定要解除该设备的绑定吗？解绑后其他账号将可以重新绑定。';
+
+  @override
+  String get searchingDevices => '正在搜索设备';
+
+  @override
+  String get searching => '搜索中...';
+
+  @override
+  String get noDevicesFound => '附近未发现可用设备';
+
+  @override
+  String get bindSuccess => '设备绑定成功';
 }

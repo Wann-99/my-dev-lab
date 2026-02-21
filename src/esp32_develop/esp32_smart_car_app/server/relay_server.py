@@ -183,9 +183,38 @@ async def capture_handler(request):
         logger.error(f"Capture proxy error: {e}")
         return web.Response(status=500, text=str(e))
 
+async def index_handler(request):
+    """Simple index page to show server is running"""
+    html = """
+    <html>
+        <head><title>ESP32 Smart Car Relay Server</title></head>
+        <body style="font-family: sans-serif; padding: 20px;">
+            <h1>🚗 ESP32 Smart Car Relay Server</h1>
+            <p>Status: <span style="color: green;">Running</span></p>
+            <ul>
+                <li><a href="/status">View Device Status</a></li>
+                <li>WebSocket Endpoint: <code>/ws</code></li>
+            </ul>
+            <hr>
+            <p><small>Usage: /ws?role=device&deviceId=xxx OR /ws?role=app&deviceId=xxx</small></p>
+        </body>
+    </html>
+    """
+    return web.Response(text=html, content_type='text/html')
+
+async def status_handler(request):
+    """Return the status of connected devices and apps"""
+    return web.json_response({
+        "devices": list(devices.keys()),
+        "car_clients": list(car_clients.keys()),
+        "apps": {k: len(v) for k, v in apps.items()}
+    })
+
 async def init_app():
     app = web.Application()
+    app.router.add_get('/', index_handler)
     app.router.add_get('/ws', ws_handler)
+    app.router.add_get('/status', status_handler)
     app.router.add_get('/stream/{deviceId}', stream_handler)
     app.router.add_get('/capture/{deviceId}', capture_handler)
     return app

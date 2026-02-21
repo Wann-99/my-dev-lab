@@ -16,7 +16,6 @@ class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
   final List<Widget> _pages = [
     const HomePage(),
-    const NavigationPage(),
     const ControlEntryPage(),
     const MinePage(),
   ];
@@ -38,7 +37,6 @@ class _MainScreenState extends State<MainScreen> {
         unselectedItemColor: Colors.grey,
         items: [
           BottomNavigationBarItem(icon: const Icon(Icons.home), label: l10n.home),
-          BottomNavigationBarItem(icon: const Icon(Icons.map), label: l10n.navigation),
           BottomNavigationBarItem(icon: const Icon(Icons.gamepad), label: l10n.control),
           BottomNavigationBarItem(icon: const Icon(Icons.person), label: l10n.mine),
         ],
