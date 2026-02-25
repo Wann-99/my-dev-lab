@@ -8,6 +8,7 @@ import 'package:multicast_dns/multicast_dns.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:network_info_plus/network_info_plus.dart';
+import 'package:http/http.dart' as http;
 
 class CarState extends ChangeNotifier {
   WebSocketChannel? _channel;
@@ -60,16 +61,25 @@ class CarState extends ChangeNotifier {
   // Hardware State
   bool isLightOn = false;
   bool isHornOn = false;
+  bool isCamFlashOn = false;
   
   // Version Info
   String currentAppVersion = "1.0.0";
   String latestAppVersion = "1.0.0";
-  String currentFirmwareVersion = "1.0.0";
+  
+  // Dual MCU Firmware Info
+  String currentFirmwareVersion = "1.0.0"; // S3 Main
   String latestFirmwareVersion = "1.0.0";
+  String currentCamFirmwareVersion = "1.0.0"; // CAM Vision
+  String latestCamFirmwareVersion = "1.0.0";
+  
   String appUpdateLog = "";
   String firmwareUpdateLog = "";
+  String camFirmwareUpdateLog = "";
+  
   bool hasAppUpdate = false;
   bool hasFirmwareUpdate = false;
+  bool hasCamFirmwareUpdate = false;
   
   // PTZ State
   double cameraAngle = 90.0;
@@ -100,6 +110,11 @@ class CarState extends ChangeNotifier {
     firmwareUpdateLog = "1. Enhanced WiFi stability\n2. Optimized motor PID control algorithm\n3. Added OTA upgrade support";
     hasFirmwareUpdate = latestFirmwareVersion != currentFirmwareVersion;
     
+    // Simulate finding CAM firmware update
+    latestCamFirmwareVersion = "1.0.5";
+    camFirmwareUpdateLog = "1. Improved MJPEG stream FPS\n2. Added mDNS support (robocar-cam.local)\n3. Optimized auto-exposure for low light";
+    hasCamFirmwareUpdate = latestCamFirmwareVersion != currentCamFirmwareVersion;
+    
     notifyListeners();
   }
 
@@ -112,54 +127,43 @@ class CarState extends ChangeNotifier {
     }
   }
 
-  Future<void> startLocalOTA(File firmwareFile) async {
-    if (!isConnected) return;
+  Future<void> startLocalOTA(File firmwareFile, {bool isCam = false}) async {
+    if (!isConnected || carIp.isEmpty) return;
 
     try {
-      // 1. Get phone IP in LAN
-      final info = NetworkInfo();
-      String? localIp = await info.getWifiIP();
-      
-      if (localIp == null) {
-        debugPrint("Could not get local IP, please ensure WiFi is connected");
-        return;
-      }
-
-      // 2. If there's an existing server, close it first
-      await stopLocalServer();
-
-      // 3. Start temporary HTTP server
-      var handler = const Pipeline()
-          .addMiddleware(logRequests())
-          .addHandler((Request request) async {
-            if (request.url.path == 'firmware.bin') {
-              final bytes = await firmwareFile.readAsBytes();
-              return Response.ok(bytes, headers: {
-                'content-type': 'application/octet-stream',
-                'content-disposition': 'attachment; filename="firmware.bin"',
-                'content-length': bytes.length.toString(),
-              });
-            }
-            return Response.notFound('Not Found');
-          });
-
-      _localServer = await shelf_io.serve(handler, InternetAddress.anyIPv4, 8080);
-      isLocalServerRunning = true;
-      localServerUrl = "http://$localIp:8080/firmware.bin";
-      debugPrint('Local firmware server started: $localServerUrl');
-
-      // 4. Notify device to download from phone
-      sendCommand({
-        "cmd": "ota_start",
-        "url": localServerUrl
-      });
-      
+      isLocalServerRunning = true; // Use this as "isUpdating" flag
       notifyListeners();
 
-      // 5. Auto timeout (10 minutes)
-      Timer(const Duration(minutes: 10), () => stopLocalServer());
+      final uri = Uri.parse("http://$carIp/update${isCam ? "?target=cam" : ""}");
+      var request = http.MultipartRequest('POST', uri);
+      
+      // ESP32-S3 expects raw body or multipart? 
+      // My ota_server.c implementation uses httpd_req_recv, which handles raw body better.
+      // But standard HTML forms use multipart. 
+      // Let's check my ota_server.c again.
+      // It uses `httpd_req_recv(req, buf, MIN(remaining, sizeof(buf)))` which reads the raw body.
+      // So we should send the raw bytes.
+
+      final bytes = await firmwareFile.readAsBytes();
+      
+      final response = await http.post(
+        uri,
+        body: bytes,
+        headers: {
+          'Content-Type': 'application/octet-stream',
+        },
+      ).timeout(const Duration(minutes: 5));
+
+      if (response.statusCode == 200) {
+        debugPrint("OTA Upload Success: ${response.body}");
+      } else {
+        debugPrint("OTA Upload Failed (${response.statusCode}): ${response.body}");
+        throw Exception("Update failed: ${response.body}");
+      }
     } catch (e) {
-      debugPrint("Failed to start local OTA server: $e");
+      debugPrint("Failed to perform local OTA: $e");
+      rethrow;
+    } finally {
       isLocalServerRunning = false;
       notifyListeners();
     }
@@ -323,6 +327,9 @@ class CarState extends ChangeNotifier {
     if (newCameraIp != null) {
       await prefs.setString('camera_ip', newCameraIp);
       cameraIp = newCameraIp;
+      if (isConnected) {
+        sendCommand({"cmd": "set_cam_ip", "value": newCameraIp});
+      }
     }
     if (newDeviceId != null) {
       await prefs.setString('device_id', newDeviceId);
@@ -441,6 +448,12 @@ class CarState extends ChangeNotifier {
   void toggleHorn(bool on) {
     isHornOn = on;
     sendCommand({"cmd": "horn", "val": isHornOn ? 1 : 0});
+    notifyListeners();
+  }
+
+  void toggleCamFlash() {
+    isCamFlashOn = !isCamFlashOn;
+    sendCommand({"cmd": "cam_flash", "val": isCamFlashOn ? 255 : 0});
     notifyListeners();
   }
 
@@ -579,6 +592,10 @@ class CarState extends ChangeNotifier {
       _channel = WebSocketChannel.connect(uri);
       await _channel!.ready; 
       isConnected = true;
+      _isManuallyDisconnected = false;
+
+      // Request initial status and Camera IP
+      sendCommand({"cmd": "status"});
       
       // Initial commands
       sendCommand({"cmd": "servo", "channel": 0, "angle": ultrasonicAngle});
@@ -609,6 +626,15 @@ class CarState extends ChangeNotifier {
             }
             
             if (data['mode'] != null) mode = data['mode'].toString().toUpperCase();
+            if (data.containsKey('cam_ip') || data.containsKey('camIP')) {
+              String? newIp = data['cam_ip'] ?? data['camIP'];
+              if (newIp != null && newIp != "0.0.0.0" && newIp != cameraIp) {
+                cameraIp = newIp;
+                SharedPreferences.getInstance().then((prefs) {
+                  prefs.setString('camera_ip', newIp);
+                });
+              }
+            }
             if (data['v_car'] != null) carBattery = (data['v_car'] as num).toDouble();
             if (data['rssi'] != null) wifiSignal = (data['rssi'] as num).toInt();
             

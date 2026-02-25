@@ -5,6 +5,7 @@
 #include "esp_log.h"
 #include "http_server.h"
 #include "camera_index.h"
+#include "ota_server.h"
 #include <sys/time.h>
 
 static const char *TAG = "camera_httpd";
@@ -73,6 +74,7 @@ httpd_handle_t start_webserver(void) {
         httpd_register_uri_handler(server, &status_uri);
         httpd_register_uri_handler(server, &cmd_uri);
         httpd_register_uri_handler(server, &capture_uri);
+        register_ota_handlers(server);
     }
     
     config.server_port += 1;

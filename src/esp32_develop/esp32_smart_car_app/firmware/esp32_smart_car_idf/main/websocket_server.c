@@ -14,6 +14,7 @@
 #include "pca9685.h"
 #include "system_ctrl.h"
 #include "wifi_app.h"
+#include "wireless_comm.h"
 #include "car_commands.h"
 #include "ota_server.h"
 

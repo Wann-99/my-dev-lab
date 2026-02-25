@@ -6,3 +6,4 @@ void set_horn(int val);
 
 // Status Functions
 float get_battery_voltage(void);
+int get_wifi_rssi(void);

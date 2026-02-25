@@ -16,13 +16,68 @@ class _NetworkConfigPageState extends State<NetworkConfigPage> {
   final _passwordController = TextEditingController();
   final _ipController = TextEditingController();
   bool _isLoading = false;
+  bool _isScanning = false;
   bool _isSuccess = false;
   String _statusMessage = "";
+  List<dynamic> _wifiList = [];
 
   @override
   void initState() {
     super.initState();
     _ipController.text = widget.baseIp;
+  }
+
+  Future<void> _scanWifi() async {
+    setState(() {
+      _isScanning = true;
+      _statusMessage = "正在扫描 WiFi...";
+    });
+
+    final ip = _ipController.text;
+    final url = Uri.parse("http://$ip/wifi/scan");
+
+    try {
+      final response = await http.get(url).timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        setState(() {
+          _wifiList = data;
+          _statusMessage = "扫描完成，找到 ${data.length} 个网络";
+        });
+        _showWifiPicker();
+      } else {
+        setState(() => _statusMessage = "扫描失败: ${response.statusCode}");
+      }
+    } catch (e) {
+      setState(() => _statusMessage = "扫描出错: $e");
+    } finally {
+      setState(() => _isScanning = false);
+    }
+  }
+
+  void _showWifiPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A2E),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => ListView.builder(
+        itemCount: _wifiList.length,
+        itemBuilder: (context, index) {
+          final wifi = _wifiList[index];
+          return ListTile(
+            leading: const Icon(Icons.wifi, color: Color(0xFF00F0FF)),
+            title: Text(wifi['ssid'] ?? "未知 SSID", style: const TextStyle(color: Colors.white)),
+            subtitle: Text("信号: ${wifi['rssi']} dBm", style: const TextStyle(color: Colors.grey)),
+            onTap: () {
+              setState(() {
+                _ssidController.text = wifi['ssid'];
+              });
+              Navigator.pop(context);
+            },
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _saveNetwork() async {
@@ -34,7 +89,7 @@ class _NetworkConfigPageState extends State<NetworkConfigPage> {
     });
 
     final ip = _ipController.text;
-    final url = Uri.parse("http://$ip:8080/wifi");
+    final url = Uri.parse("http://$ip/wifi");
 
     try {
       final response = await http.post(
@@ -116,6 +171,12 @@ class _NetworkConfigPageState extends State<NetworkConfigPage> {
                    decoration: InputDecoration(
                      labelText: l10n.wifiSsid,
                      prefixIcon: const Icon(Icons.wifi, color: Color(0xFF00F0FF)),
+                     suffixIcon: IconButton(
+                       icon: _isScanning 
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.search, color: Color(0xFF00F0FF)),
+                       onPressed: _isScanning ? null : _scanWifi,
+                     ),
                    ),
                    style: const TextStyle(color: Colors.white),
                  ),

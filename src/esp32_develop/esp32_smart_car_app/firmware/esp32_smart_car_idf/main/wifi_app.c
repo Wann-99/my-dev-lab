@@ -14,6 +14,7 @@
 #include "mdns.h"
 
 #include "wifi_app.h"
+#include "wireless_comm.h"
 
 /* FreeRTOS event group to signal when we are connected*/
 static EventGroupHandle_t s_wifi_event_group;
@@ -59,6 +60,13 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         ESP_LOGI(TAG, "STA Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+        
+        // SYNC WiFi to CAM via Wireless
+        wifi_config_t current_conf;
+        if (esp_wifi_get_config(WIFI_IF_STA, &current_conf) == ESP_OK) {
+            wireless_comm_send_wifi_sync((const char*)current_conf.sta.ssid, (const char*)current_conf.sta.password);
+        }
+
         start_mdns_service();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_START) {
         ESP_LOGI(TAG, "SoftAP started.");

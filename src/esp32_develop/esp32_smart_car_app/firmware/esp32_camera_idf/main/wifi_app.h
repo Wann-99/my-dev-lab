@@ -11,3 +11,8 @@ extern EventGroupHandle_t s_wifi_event_group;
 #define WIFI_CONNECTED_BIT BIT0
 
 void wifi_init_sta(void);
+
+/**
+ * @brief Update WiFi credentials and reconnect
+ */
+void wifi_update_credentials(const char* ssid, const char* pass);

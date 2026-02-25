@@ -13,6 +13,7 @@
 #include "config_storage.h"
 #include "ultrasonic.h"
 #include "ota_server.h"
+#include "wireless_comm.h"
 
 #include "driver/gpio.h"
 #include "esp_adc/adc_oneshot.h"
@@ -61,7 +62,7 @@ void set_horn(int val) {
     ESP_LOGI("CTRL", "Horn: %d", val);
 }
 
-float get_battery_voltage() {
+float get_battery_voltage(void) {
     int adc_raw;
     if (adc_oneshot_read(adc1_handle, BAT_ADC_CHAN, &adc_raw) == ESP_OK) {
         // Simple conversion: 3.3V ref, 12-bit (4095)
@@ -72,7 +73,7 @@ float get_battery_voltage() {
     return 0.0f;
 }
 
-int get_wifi_rssi() {
+int get_wifi_rssi(void) {
     wifi_ap_record_t ap_info;
     if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
         return ap_info.rssi;
@@ -127,7 +128,6 @@ void app_main(void)
     xTaskCreate(serial_console_task, "serial_task", 4096, NULL, 5, NULL);
     
     // Note: I2C Pins (SDA=11, SCL=12) defined in pca9685.h
-    // Ensure these do not conflict with M4_IN2(8) or TRIG(9)
     if (pca9685_init() == ESP_OK) {
         ESP_LOGI(TAG, "PCA9685 Initialized");
     } else {
@@ -136,6 +136,7 @@ void app_main(void)
 
     // 3. Network Init
     wifi_init_manager();
+    wireless_comm_init();
     
     // Give some time for WiFi to stabilize before starting the server
     vTaskDelay(pdMS_TO_TICKS(1000));
@@ -234,11 +235,12 @@ void app_main(void)
         // Broadcast to App (Local and Remote)
         float v_car = get_battery_voltage();
         int rssi = get_wifi_rssi();
+        const char* cam_ip = wireless_comm_get_cam_ip();
         
-        char json_buf[128];
+        char json_buf[192]; // Increased size for cam_ip
         snprintf(json_buf, sizeof(json_buf), 
-                 "{\"type\":\"status\",\"dist\":%.1f,\"v_car\":%.2f,\"rssi\":%d,\"mode\":\"%s\"}", 
-                 distance, v_car, rssi, (g_car_mode == 1 ? "AUTO" : "MANUAL"));
+                 "{\"type\":\"status\",\"dist\":%.1f,\"v_car\":%.2f,\"rssi\":%d,\"mode\":\"%s\",\"cam_ip\":\"%s\"}", 
+                 distance, v_car, rssi, (g_car_mode == 1 ? "AUTO" : "MANUAL"), cam_ip);
         
         // Send to local clients
         websocket_server_broadcast(json_buf);

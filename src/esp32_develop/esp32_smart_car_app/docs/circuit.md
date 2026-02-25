@@ -51,6 +51,40 @@
 | | VCC | 3.3V / 5V | |
 | | GND | GND | |
 
+### 5. Dual MCU Communication (Wireless)
+
+The ESP32-S3 and ESP32-CAM communicate wirelessly using the **ESP-NOW** protocol. This replaces the physical UART wiring, making the build cleaner and more reliable.
+
+- **Protocol**: ESP-NOW (Point-to-Point)
+- **Channel**: Dynamically synced with WiFi (2.4GHz)
+- **Functions**:
+  - S3 sends WiFi credentials to CAM for automatic synchronization.
+  - S3 sends camera controls (Flash LED, quality settings).
+  - CAM sends status updates and responses.
+
+> **Note**: No physical data wires are required between S3 and CAM. They only need to share a common Ground (GND) if powered from different sources, but since they share the battery/L298N power rail, even that is handled by the power wiring.
+
+## ESP32-S3 Pinout (DevKit)
+
+- **Power**: 5V (USB or Battery) and GND.
+- **Battery Monitor (ADC)**: GPIO 1.
+- **Light / Flash**: GPIO 2.
+- **Horn / Buzzer**: GPIO 3.
+- **USB Serial / Log**: GPIO 43 (TX), GPIO 44 (RX).
+- **I2C**: GPIO 11 (SDA), GPIO 12 (SCL) - Used for PCA9685 Servo Controller.
+- **Encoders**: 
+  - M1: 39/40
+  - M2: 41/42
+  - M3: 43/44 (Note: This conflicts with USB Serial Log!)
+  - M4: 45/46
+
+## ESP32-CAM Pinout (AI-Thinker)
+
+- **Power**: 5V (from Battery/L298N) and GND.
+- **Vision**: All camera pins are fixed by internal connection.
+- **Flash LED**: GPIO 4 (Controlled via Wireless command).
+- **Status LED**: GPIO 33 (Active Low).
+
 ## Power Wiring
 
 1. **L298N 12V**: Connect to Battery (+)

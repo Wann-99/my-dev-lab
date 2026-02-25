@@ -7,7 +7,10 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
+#include "mdns.h"
+#include "cJSON.h"
 #include "wifi_app.h"
+#include "wireless_comm.h"
 #include "sdkconfig.h"
 #include "camera_pins.h"
 #include "driver/gpio.h"
@@ -23,6 +26,25 @@ EventGroupHandle_t s_wifi_event_group;
 
 static int s_retry_num = 0;
 
+static void start_mdns_service(void)
+{
+    static bool mdns_started = false;
+    if (mdns_started) return;
+
+    esp_err_t err = mdns_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "MDNS Init failed: %d", err);
+        return;
+    }
+    mdns_hostname_set("robocar-cam");
+    mdns_instance_name_set("RoboCar Vision Module");
+    
+    mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
+    mdns_service_add(NULL, "_mjpeg", "_tcp", 81, NULL, 0);
+    mdns_started = true;
+    ESP_LOGI(TAG, "mDNS started: robocar-cam.local");
+}
+
 static void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
 {
@@ -36,21 +58,40 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         if (event->reason == WIFI_REASON_NO_AP_FOUND) {
             ESP_LOGW(TAG, "AP Not Found. Check SSID or Frequency (2.4GHz only).");
         }
-        if (s_retry_num < MAXIMUM_RETRY) {
-            gpio_set_level(LED_STATUS_GPIO_NUM, 0); // Turn ON LED for retry
+        if (s_retry_num < 3) {
+            gpio_set_level(LED_STATUS_GPIO_NUM, 0); 
+            vTaskDelay(pdMS_TO_TICKS(2000)); 
             esp_wifi_connect();
             s_retry_num++;
-            ESP_LOGI(TAG, "retry to connect to the AP");
+            ESP_LOGI(TAG, "retry to connect to the AP (%d/3)", s_retry_num);
         } else {
+            // CRITICAL: Stop calling esp_wifi_connect to free the radio for ESP-NOW channel hopping
+            ESP_LOGW(TAG, "WiFi fail. Entering PURE LISTENING MODE for ESP-NOW sync...");
             xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
-            ESP_LOGI(TAG, "connect to the AP fail");
+            // No esp_wifi_connect() here, just wait for wireless_comm to call wifi_update_credentials
         }
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
-        ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+        char ip_str[16];
+        esp_ip4addr_ntoa(&event->ip_info.ip, ip_str, sizeof(ip_str));
+        ESP_LOGI(TAG, "Got IP: %s", ip_str);
+        
+        // Notify S3 about the Camera IP via Wireless
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddStringToObject(root, "res", "ip_info");
+        cJSON_AddStringToObject(root, "ip", ip_str);
+        char *out = cJSON_PrintUnformatted(root);
+        if (out) {
+            wireless_comm_send_response(out);
+            free(out);
+        }
+        cJSON_Delete(root);
+
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
         
+        start_mdns_service();
+
         // Blink 3 times to indicate success
         for (int i = 0; i < 3; i++) {
             gpio_set_level(LED_STATUS_GPIO_NUM, 1); // OFF
@@ -110,4 +151,27 @@ void wifi_init_sta(void)
     ESP_ERROR_CHECK(esp_wifi_set_max_tx_power(78)); // Max TX power (approx 19.5dBm) for best range
 
     ESP_LOGI(TAG, "wifi_init_sta finished.");
+}
+
+void wifi_update_credentials(const char* ssid, const char* pass)
+{
+    ESP_LOGI(TAG, "Updating WiFi Credentials: %s", ssid);
+    
+    wifi_config_t wifi_config = {
+        .sta = {
+            .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+            .pmf_cfg = {
+                .capable = true,
+                .required = false
+            },
+        },
+    };
+    strncpy((char*)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid));
+    strncpy((char*)wifi_config.sta.password, pass, sizeof(wifi_config.sta.password));
+
+    s_retry_num = 0; // Reset retry count for new credentials
+    
+    esp_wifi_disconnect();
+    esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
+    esp_wifi_connect();
 }

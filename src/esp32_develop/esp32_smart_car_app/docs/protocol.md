@@ -71,4 +71,13 @@
 
 ## 4. 视频流 (ESP32-CAM)
 视频流独立于控制通道，通常使用 HTTP MJPEG 协议。
-- 地址格式: `http://<ESP32-CAM-IP>:81/stream`
+- 地址格式: `http://robocar-cam.local:81/stream` (或 IP 形式)
+
+## 5. 固件 OTA 更新
+
+### 5.1 统一更新界面
+- 地址: `http://<ESP32-S3-IP>/update` 或 `http://robocar-xxxxxx.local/update`
+- 功能: 支持上传 `.bin` 固件，并选择更新对象（S3 主控或 CAM 视觉模块）。
+
+### 5.2 直连更新 (调试用)
+- ESP32-CAM 直连地址: `http://robocar-cam.local/update`

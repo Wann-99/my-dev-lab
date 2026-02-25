@@ -9,7 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../l10n/app_localizations.dart';
 import '../models/car_state.dart';
-import 'device_settings_page.dart';
+import 'device_config_page.dart';
 
 class ControlPage extends StatefulWidget {
   const ControlPage({super.key});
@@ -383,9 +383,15 @@ class _ControlPageState extends State<ControlPage> {
           const SizedBox(width: 20),
           _buildActionButton(Icons.campaign, state.isHornOn ? Colors.red : Colors.white, () => state.toggleHorn(!state.isHornOn)),
           const SizedBox(width: 20),
+          _buildActionButton(
+            state.isCamFlashOn ? Icons.flash_on : Icons.flash_off, 
+            state.isCamFlashOn ? Colors.amber : Colors.white, 
+            () => state.toggleCamFlash()
+          ),
+          const SizedBox(width: 20),
            _buildActionButton(Icons.settings, Colors.white, () {
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const DeviceSettingsPage()),
+                MaterialPageRoute(builder: (_) => const DeviceConfigPage()),
               );
            }),
          ],

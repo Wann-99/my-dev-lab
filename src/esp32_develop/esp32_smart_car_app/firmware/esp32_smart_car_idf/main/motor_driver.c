@@ -38,19 +38,27 @@ static encoder_t enc_m1, enc_m2, enc_m3, enc_m4;
 
 // --- Adaptive Control Parameters ---
 
+#define PID_BASE_KP 1.5f
+#define PID_BASE_KI 0.5f
+#define PID_BASE_KD 0.1f
+
+#define SMC_BASE_K_SW 200.0f
+#define SMC_BASE_K_P 1.0f
+#define SMC_BASE_BOUNDARY 50.0f
+
 // PID Base & Adaptive Limits
-static float g_pid_kp = 1.5f;
-static float g_pid_ki = 0.5f;
-static float g_pid_kd = 0.1f;
+static float g_pid_kp = PID_BASE_KP;
+static float g_pid_ki = PID_BASE_KI;
+static float g_pid_kd = PID_BASE_KD;
 
 #define PID_LOW_SPEED_THRESHOLD 50.0f // counts/50ms
 #define PID_BOOST_KP 2.5f
 #define PID_BOOST_KI 0.8f
 
 // SMC Base & Adaptive Limits
-static float g_smc_k_sw = 200.0f;
-static float g_smc_k_p = 1.0f;
-static float g_smc_boundary = 50.0f;
+static float g_smc_k_sw = SMC_BASE_K_SW;
+static float g_smc_k_p = SMC_BASE_K_P;
+static float g_smc_boundary = SMC_BASE_BOUNDARY;
 
 #define SMC_LOW_SPEED_K_SW 300.0f // Higher switching gain for stiction
 #define SMC_HIGH_SPEED_K_SW 150.0f // Lower switching gain to reduce chatter
@@ -379,4 +387,18 @@ void motor_set_control_strategy(int strategy) {
         g_ctrl_strategy = strategy;
         ESP_LOGI(TAG, "Switched to %s Control", (strategy == 0) ? "PID" : "SMC");
     }
+}
+
+void motor_set_pid_params(float kp, float ki, float kd) {
+    g_pid_kp = kp;
+    g_pid_ki = ki;
+    g_pid_kd = kd;
+    ESP_LOGI(TAG, "PID Tuned: P=%.2f, I=%.2f, D=%.2f", kp, ki, kd);
+}
+
+void motor_set_smc_params(float k_sw, float k_p, float boundary) {
+    g_smc_k_sw = k_sw;
+    g_smc_k_p = k_p;
+    g_smc_boundary = boundary;
+    ESP_LOGI(TAG, "SMC Tuned: K_SW=%.2f, K_P=%.2f, Boundary=%.2f", k_sw, k_p, boundary);
 }

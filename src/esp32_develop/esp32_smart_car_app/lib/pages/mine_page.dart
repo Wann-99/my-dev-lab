@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../models/car_state.dart';
-import 'device_settings_page.dart';
-import 'network_config_page.dart';
+import 'device_config_page.dart';
+import 'network_mgmt_page.dart';
+import 'advanced_settings_page.dart';
 import 'about_page.dart';
 import 'login_page.dart';
+import 'network_config_page.dart'; // This is for SoftAP WiFi config
 
 class MinePage extends StatelessWidget {
   const MinePage({super.key});
@@ -21,13 +23,14 @@ class MinePage extends StatelessWidget {
         children: [
           _buildUserHeader(context, state),
           const Divider(),
-          _buildBindingSection(context, state),
-          const Divider(),
-          _buildMenuItem(context, Icons.settings, l10n.deviceSettings, () {
-            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DeviceSettingsPage()));
+          _buildMenuItem(context, Icons.settings_input_component, l10n.deviceSettings, () {
+            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DeviceConfigPage()));
           }),
-          _buildMenuItem(context, Icons.wifi, l10n.networkConfig, () {
-            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NetworkConfigPage()));
+          _buildMenuItem(context, Icons.wifi_tethering, l10n.networkConfig, () {
+            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NetworkMgmtPage()));
+          }),
+          _buildMenuItem(context, Icons.admin_panel_settings, l10n.advancedSettings, () {
+            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AdvancedSettingsPage()));
           }),
           _buildMenuItem(
             context, 
@@ -41,8 +44,8 @@ class MinePage extends StatelessWidget {
           _buildMenuItem(context, Icons.language, l10n.language, () {
             _showLanguageDialog(context, state, l10n);
           }),
-          _buildMenuItem(context, Icons.history, l10n.logs, () {}),
-          _buildMenuItem(context, Icons.bar_chart, l10n.statistics, () {}),
+          const Divider(),
+          _buildBindingSection(context, state),
           const Divider(),
           _buildMenuItem(context, Icons.exit_to_app, l10n.logout, () {
             Navigator.of(context).pushAndRemoveUntil(

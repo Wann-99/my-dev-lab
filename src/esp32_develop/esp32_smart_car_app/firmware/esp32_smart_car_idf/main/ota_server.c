@@ -26,28 +26,53 @@ static const char *TAG = "ota_server";
 static const char *ota_upload_form =
     "<!DOCTYPE html>"
     "<html>"
-    "<head><meta name='viewport' content='width=device-width, initial-scale=1'></head>"
+    "<head><meta name='viewport' content='width=device-width, initial-scale=1'>"
+    "<style>"
+    "  body { font-family: sans-serif; text-align: center; padding: 20px; background-color: #f4f4f9; }"
+    "  .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: inline-block; max-width: 400px; width: 100%; }"
+    "  h1 { color: #333; }"
+    "  .target-select { margin-bottom: 20px; }"
+    "  input[type='file'] { margin: 10px 0; }"
+    "  button { background-color: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }"
+    "  button:hover { background-color: #0056b3; }"
+    "  #status { margin-top: 20px; font-weight: bold; }"
+    "</style>"
+    "</head>"
     "<body>"
+    "<div class='card'>"
     "<h1>RoboCar-A OTA Update</h1>"
+    "<div class='target-select'>"
+    "  <label><input type='radio' name='target' value='s3' checked> Main (ESP32-S3)</label>"
+    "  <label><input type='radio' name='target' value='cam'> Vision (ESP32-CAM)</label>"
+    "</div>"
     "<p>Select firmware.bin file:</p>"
     "<input type='file' id='fileInput'><br><br>"
-    "<button onclick='upload()'>Update Firmware</button>"
-    "<div id='status' style='margin-top:20px;'></div>"
+    "<button onclick='upload()'>Flash Selected MCU</button>"
+    "<div id='status'></div>"
+    "</div>"
     "<script>"
     "function upload() {"
+    "  var target = document.querySelector('input[name=\"target\"]:checked').value;"
     "  var fileInput = document.getElementById('fileInput');"
     "  var file = fileInput.files[0];"
     "  if (!file) { alert('Please select a file'); return; }"
     "  var status = document.getElementById('status');"
-    "  status.innerText = 'Uploading...';"
+    "  status.innerText = 'Uploading to ' + (target === 's3' ? 'Main' : 'Camera') + '...';"
+    "  "
+    "  var url = '/update';"
+    "  if (target === 'cam') {"
+    "    // If target is CAM, we send it to S3 with a header, and S3 will proxy it?"
+    "    // Or just try to find the CAM IP. For now, we'll tell S3 to proxy it."
+    "    url = '/update?target=cam';"
+    "  }"
+    "  "
     "  var xhr = new XMLHttpRequest();"
-    "  xhr.open('POST', '/update', true);"
+    "  xhr.open('POST', url, true);"
     "  xhr.onload = function() {"
-    "    status.innerText = 'Status: ' + xhr.responseText;"
+    "    if (xhr.status == 200) { status.innerText = 'Success: ' + xhr.responseText; }"
+    "    else { status.innerText = 'Error (' + xhr.status + '): ' + xhr.responseText; }"
     "  };"
-    "  xhr.onerror = function() {"
-    "    status.innerText = 'Error during upload';"
-    "  };"
+    "  xhr.onerror = function() { status.innerText = 'Error during upload'; };"
     "  xhr.send(file);"
     "}"
     "</script>"
@@ -60,8 +85,76 @@ static esp_err_t ota_update_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t ota_proxy_to_cam(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "Proxying OTA update to ESP32-CAM...");
+    
+    esp_http_client_config_t config = {
+        .url = "http://robocar-cam.local/update",
+        .method = HTTP_METHOD_POST,
+        .timeout_ms = 10000,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (!client) {
+        ESP_LOGE(TAG, "Failed to initialize HTTP client");
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
+
+    esp_http_client_set_header(client, "Content-Type", "application/octet-stream");
+    
+    esp_err_t err = esp_http_client_open(client, req->content_len);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open connection to CAM: %s", esp_err_to_name(err));
+        esp_http_client_cleanup(client);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "CAM not found or unreachable");
+        return ESP_FAIL;
+    }
+
+    char buf[1024];
+    int remaining = req->content_len;
+    while (remaining > 0) {
+        int received = httpd_req_recv(req, buf, MIN(remaining, sizeof(buf)));
+        if (received <= 0) {
+            if (received == HTTPD_SOCK_ERR_TIMEOUT) continue;
+            break;
+        }
+        int sent = esp_http_client_write(client, buf, received);
+        if (sent < 0) {
+            ESP_LOGE(TAG, "Failed to send data to CAM");
+            break;
+        }
+        remaining -= received;
+    }
+
+    esp_http_client_fetch_headers(client);
+    int status_code = esp_http_client_get_status_code(client);
+    ESP_LOGI(TAG, "CAM OTA Status Code: %d", status_code);
+
+    if (status_code == 200) {
+        httpd_resp_sendstr(req, "Camera Update Success! The camera is rebooting.");
+    } else {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Camera Update Failed");
+    }
+
+    esp_http_client_close(client);
+    esp_http_client_cleanup(client);
+    return ESP_OK;
+}
+
 static esp_err_t ota_update_post_handler(httpd_req_t *req)
 {
+    // Check for target query parameter
+    char query[32];
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
+        char target[8];
+        if (httpd_query_key_value(query, "target", target, sizeof(target)) == ESP_OK) {
+            if (strcmp(target, "cam") == 0) {
+                return ota_proxy_to_cam(req);
+            }
+        }
+    }
+
     esp_ota_handle_t update_handle = 0;
     const esp_partition_t *update_partition = NULL;
     char buf[1024];

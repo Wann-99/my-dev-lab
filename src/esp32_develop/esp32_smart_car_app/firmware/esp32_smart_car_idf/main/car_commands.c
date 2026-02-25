@@ -7,6 +7,7 @@
 #include "system_ctrl.h"
 #include "wifi_app.h"
 #include "ota_server.h"
+#include "wireless_comm.h"
 #include "nvs_flash.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
@@ -43,6 +44,20 @@ esp_err_t handle_car_command(const char *json_data, char *response_buffer, size_
 
     if (strcmp(cmd_str, "ping") == 0) {
         if (response_buffer) snprintf(response_buffer, response_len, "{\"res\":\"pong\"}");
+    } else if (strcmp(cmd_str, "status") == 0) {
+        // App typically calls this to get initial state and CAM IP
+        const char* cam_ip = wireless_comm_get_cam_ip();
+        if (response_buffer) {
+            snprintf(response_buffer, response_len, 
+                "{\"res\":\"ok\",\"type\":\"status\",\"cam_ip\":\"%s\",\"camIP\":\"%s\",\"mode\":\"%s\",\"bat\":%.2f,\"rssi\":%d}",
+                cam_ip, cam_ip, g_car_mode == 1 ? "AUTO" : "MANUAL", get_battery_voltage(), get_wifi_rssi());
+        }
+    } else if (strcmp(cmd_str, "set_cam_ip") == 0) {
+        cJSON *j_val = cJSON_GetObjectItem(root, "value");
+        if (j_val && cJSON_IsString(j_val)) {
+            wireless_comm_save_cam_ip(j_val->valuestring);
+            if (response_buffer) snprintf(response_buffer, response_len, "{\"res\":\"ok\",\"msg\":\"cam_ip_saved\"}");
+        }
     } else if (strcmp(cmd_str, "mode") == 0) {
         cJSON *j_mode = cJSON_GetObjectItem(root, "value");
         if (j_mode && cJSON_IsString(j_mode)) {
@@ -114,6 +129,15 @@ esp_err_t handle_car_command(const char *json_data, char *response_buffer, size_
         cJSON *j_val = cJSON_GetObjectItem(root, "val");
         if (j_val) val = j_val->valueint;
         set_horn(val);
+    } else if (strcmp(cmd_str, "cam_flash") == 0) {
+        int val = 0;
+        cJSON *j_val = cJSON_GetObjectItem(root, "val");
+        if (j_val) val = j_val->valueint;
+        wireless_comm_send_cam_ctrl("flash", val);
+    } else if (strcmp(cmd_str, "ping_cam") == 0) {
+        ESP_LOGI(TAG, "Command: Pinging CAM via Wireless...");
+        wireless_comm_send_ping();
+        if (response_buffer) snprintf(response_buffer, response_len, "{\"res\":\"ok\",\"msg\":\"ping_sent\"}");
     } else if (strcmp(cmd_str, "reset") == 0 || strcmp(cmd_str, "RESET") == 0) {
         ESP_LOGW(TAG, "Command: Resetting WiFi credentials...");
         if (response_buffer) snprintf(response_buffer, response_len, "{\"res\":\"ok\",\"msg\":\"resetting\",\"type\":\"status_reset\"}");

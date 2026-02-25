@@ -6,6 +6,8 @@
 #include "camera_pins.h"
 #include "wifi_app.h"
 #include "http_server.h"
+#include "ota_server.h"
+#include "wireless_comm.h"
 #include "driver/gpio.h"
 #include "driver/ledc.h"
 
@@ -181,9 +183,12 @@ void app_main(void)
 
     // Initialize Flash LED (LEDC)
     init_led_flash();
-
+    
     ESP_LOGI(TAG, "Initializing WiFi...");
     wifi_init_sta();
+    
+    // Initialize Wireless Comm (MUST be after WiFi init)
+    wireless_comm_init();
 
     ESP_LOGI(TAG, "Initializing Camera...");
     if(init_camera() != ESP_OK) {
