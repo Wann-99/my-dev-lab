@@ -27,13 +27,7 @@ class HomePage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildStatusCard(context, state),
-            const SizedBox(height: 20),
             _buildVideoPreview(context, state),
-            const SizedBox(height: 20),
-            _buildQuickActions(context, state),
-            const SizedBox(height: 20),
-            _buildSensorSection(context, state),
             const SizedBox(height: 20),
             _buildInfoGrid(context, state),
           ],
@@ -44,13 +38,27 @@ class HomePage extends StatelessWidget {
 
   Widget _buildVideoPreview(BuildContext context, CarState state) {
     final l10n = AppLocalizations.of(context)!;
+    final String videoUrl;
+
+    if (state.isRemoteMode) {
+      String host = state.relayServer;
+      if (!host.startsWith('http://') && !host.startsWith('https://')) {
+        host = 'http://$host';
+      }
+      videoUrl = "$host/stream/${state.deviceId}?ip=${state.cameraIp}";
+    } else {
+      videoUrl = 'http://${state.cameraIp}:81/stream';
+    }
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final previewHeight = screenWidth * 9 / 16;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(l10n.videoPreview, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 10),
         Container(
-          height: 200,
+          height: previewHeight,
           width: double.infinity,
           decoration: BoxDecoration(
             color: Colors.black,
@@ -59,10 +67,13 @@ class HomePage extends StatelessWidget {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(15),
-            child: state.isConnected && state.cameraIp.isNotEmpty
+            child: state.cameraIp.isNotEmpty
                 ? Mjpeg(
+                    key: ValueKey(
+                      "home-${state.isRemoteMode}-${state.cameraIp}-${state.deviceId}-${state.relayServer}-${state.isConnected}",
+                    ),
                     isLive: true,
-                    stream: 'http://${state.cameraIp}:81/stream',
+                    stream: videoUrl,
                     error: (context, error, stack) => Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -80,7 +91,7 @@ class HomePage extends StatelessWidget {
                       children: [
                         Icon(Icons.videocam_off, color: Colors.grey, size: 40),
                         SizedBox(height: 10),
-                        Text("设备未连接或摄像头IP为空", style: TextStyle(color: Colors.grey)),
+                        Text("摄像头IP为空", style: TextStyle(color: Colors.grey)),
                       ],
                     ),
                   ),
@@ -239,9 +250,9 @@ class HomePage extends StatelessWidget {
                   // Navigate to MinePage (index 2 in MainScreen)
                   // This is a bit hacky, better would be a direct navigation or state change
                   // But for now, we'll suggest going to the Mine tab
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("请切换到“我的”页面进行设备搜索与绑定")),
-                  );
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("请切换到“设备”页面进行设备搜索与绑定")),
+                    );
                 },
                 icon: const Icon(Icons.search),
                 label: const Text("去绑定设备"),
@@ -330,24 +341,13 @@ class HomePage extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: state.isBound ? () async {
-                      // Switch to landscape before navigating
-                      await SystemChrome.setPreferredOrientations([
-                        DeviceOrientation.landscapeLeft,
-                        DeviceOrientation.landscapeRight,
-                      ]);
-                      
-                      if (context.mounted) {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const ControlPage()),
-                        ).then((_) {
-                          // Switch back to portrait when returning
-                          SystemChrome.setPreferredOrientations([
-                            DeviceOrientation.portraitUp,
-                          ]);
-                        });
-                      }
-                    } : null,
+                    onPressed: state.isBound
+                        ? () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("请在“控制”页面进入驾驶舱")),
+                            );
+                          }
+                        : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: state.isBound ? Colors.green.withValues(alpha: 0.8) : Colors.grey.withValues(alpha: 0.5),
                       foregroundColor: Colors.white,

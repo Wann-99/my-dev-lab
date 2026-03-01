@@ -22,6 +22,17 @@
 | | IN1 | **GPIO 18** |
 | | IN2 | **GPIO 8** |
 
+### 1.1 Encoder Pins (AB Phase)
+
+| Motor | Encoder A | Encoder B |
+| :--- | :--- | :--- |
+| **M1 (Front Left)** | **GPIO 39** | **GPIO 40** |
+| **M2 (Front Right)** | **GPIO 41** | **GPIO 42** |
+| **M3 (Rear Left)** | **GPIO 43** | **GPIO 44** |
+| **M4 (Rear Right)** | **GPIO 45** | **GPIO 46** |
+
+> **Note**: GPIO 43/44 are also used for USB Serial Log. If you need to use the serial port for debugging, you may need to reassign M3 encoder pins.
+
 ### 2. Ultrasonic Sensor (HC-SR04)
 
 | Pin | ESP32 Pin |

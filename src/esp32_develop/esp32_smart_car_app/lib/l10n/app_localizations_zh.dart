@@ -60,6 +60,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get networkSettings => '网络设置';
 
   @override
+  String get ipInfo => 'IP 信息';
+
+  @override
   String get carIpAddress => '小车 IP 地址';
 
   @override

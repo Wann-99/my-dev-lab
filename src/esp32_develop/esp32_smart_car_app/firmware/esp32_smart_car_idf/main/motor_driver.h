@@ -9,7 +9,9 @@ int motor_get_max_speed(void);
 void motor_set_ramp_step(int step);
 void motor_set_steering_factor(float factor);
 
+// New Control Parameters
+void motor_set_deadzone(float deadzone);
+void motor_set_lpf_alpha(float alpha);
+
 // Control Strategy & Tuning
-void motor_set_control_strategy(int strategy);
 void motor_set_pid_params(float kp, float ki, float kd);
-void motor_set_smc_params(float k_sw, float k_p, float boundary);

@@ -60,6 +60,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get networkSettings => 'Network Settings';
 
   @override
+  String get ipInfo => 'IP Info';
+
+  @override
   String get carIpAddress => 'Car IP Address';
 
   @override

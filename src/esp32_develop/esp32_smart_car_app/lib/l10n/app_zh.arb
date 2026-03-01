@@ -16,6 +16,7 @@
   "save": "保存",
   "saved": "已保存",
   "networkSettings": "网络设置",
+  "ipInfo": "IP 信息",
   "carIpAddress": "小车 IP 地址",
   "cameraIpAddress": "摄像头 IP 地址",
   "discoveredDevices": "发现的设备",

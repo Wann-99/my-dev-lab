@@ -13,8 +13,6 @@ class DeviceConfigPage extends StatefulWidget {
 class _DeviceConfigPageState extends State<DeviceConfigPage> {
   double _maxSpeed = 0.7;
   double _patrolSpeed = 0.4;
-  double _steeringSensitivity = 0.5;
-  double _accelerationSmoothness = 0.5;
   String _sensitivity = "Medium";
   String _resolution = "1080P";
   String _nightMode = "Auto";
@@ -27,8 +25,6 @@ class _DeviceConfigPageState extends State<DeviceConfigPage> {
     final state = context.read<CarState>();
     _maxSpeed = state.maxSpeed;
     _patrolSpeed = state.patrolSpeed;
-    _steeringSensitivity = state.steeringSensitivity;
-    _accelerationSmoothness = state.accelerationSmoothness;
     _sensitivity = state.sensitivity;
     _resolution = state.resolution;
     _nightMode = state.nightMode;
@@ -42,8 +38,6 @@ class _DeviceConfigPageState extends State<DeviceConfigPage> {
     state.saveAllSettings(
       newMaxSpeed: _maxSpeed,
       newPatrolSpeed: _patrolSpeed,
-      newSteeringSensitivity: _steeringSensitivity,
-      newAccelerationSmoothness: _accelerationSmoothness,
       newSensitivity: _sensitivity,
       newResolution: _resolution,
       newNightMode: _nightMode,
@@ -77,10 +71,6 @@ class _DeviceConfigPageState extends State<DeviceConfigPage> {
         children: [
           _buildSection(l10n.motionSettings, [
             _buildSliderRow(l10n.maxSpeed, _maxSpeed, (v) => setState(() => _maxSpeed = v)),
-            const Divider(height: 1, indent: 16, endIndent: 16, color: Colors.white10),
-            _buildSliderRow(l10n.steeringSensitivity, _steeringSensitivity, (v) => setState(() => _steeringSensitivity = v)),
-            const Divider(height: 1, indent: 16, endIndent: 16, color: Colors.white10),
-            _buildSliderRow(l10n.accelSmoothness, _accelerationSmoothness, (v) => setState(() => _accelerationSmoothness = v)),
             const Divider(height: 1, indent: 16, endIndent: 16, color: Colors.white10),
             _buildSliderRow(l10n.patrolSpeed, _patrolSpeed, (v) => setState(() => _patrolSpeed = v)),
             const Divider(height: 1, indent: 16, endIndent: 16, color: Colors.white10),

@@ -175,13 +175,6 @@ esp_err_t handle_car_command(const char *json_data, char *response_buffer, size_
         if (j_val) val = j_val->valueint;
         ESP_LOGI(TAG, "CMD: speed set to %d", val);
         motor_set_max_speed(val * 10); 
-    } else if (strcmp(cmd_str, "strategy") == 0) {
-        int val = 0;
-        cJSON *j_val = cJSON_GetObjectItem(root, "value");
-        if (j_val) val = j_val->valueint;
-        ESP_LOGI(TAG, "CMD: strategy set to %d (0=PID, 1=SMC)", val);
-        motor_set_control_strategy(val);
-        if (response_buffer) snprintf(response_buffer, response_len, "{\"res\":\"ok\",\"msg\":\"strategy_updated\",\"val\":%d}", val);
     } else if (strcmp(cmd_str, "pid_set") == 0) {
         float kp = 0, ki = 0, kd = 0;
         cJSON *j_kp = cJSON_GetObjectItem(root, "kp");
@@ -192,16 +185,6 @@ esp_err_t handle_car_command(const char *json_data, char *response_buffer, size_
         if (j_kd) kd = j_kd->valuedouble;
         motor_set_pid_params(kp, ki, kd);
         if (response_buffer) snprintf(response_buffer, response_len, "{\"res\":\"ok\",\"msg\":\"pid_updated\"}");
-    } else if (strcmp(cmd_str, "smc_set") == 0) {
-        float k_sw = 0, k_p = 0, boundary = 0;
-        cJSON *j_k_sw = cJSON_GetObjectItem(root, "k_sw");
-        cJSON *j_k_p = cJSON_GetObjectItem(root, "k_p");
-        cJSON *j_boundary = cJSON_GetObjectItem(root, "boundary");
-        if (j_k_sw) k_sw = j_k_sw->valuedouble;
-        if (j_k_p) k_p = j_k_p->valuedouble;
-        if (j_boundary) boundary = j_boundary->valuedouble;
-        motor_set_smc_params(k_sw, k_p, boundary);
-        if (response_buffer) snprintf(response_buffer, response_len, "{\"res\":\"ok\",\"msg\":\"smc_updated\"}");
     } else if (strcmp(cmd_str, "steering") == 0) {
         int val = 0;
         cJSON *j_val = cJSON_GetObjectItem(root, "value");
@@ -210,14 +193,19 @@ esp_err_t handle_car_command(const char *json_data, char *response_buffer, size_
         // Map 0-100 to 0.5-1.5 factor
         float factor = 0.5f + (val / 100.0f);
         motor_set_steering_factor(factor);
-    } else if (strcmp(cmd_str, "accel") == 0) {
-        int val = 0;
+    } else if (strcmp(cmd_str, "deadzone") == 0) {
         cJSON *j_val = cJSON_GetObjectItem(root, "value");
-        if (j_val) val = j_val->valueint;
-        ESP_LOGI(TAG, "CMD: accel smoothness set to %d", val);
-        // Map 0-100 to 10-110 ramp step (Higher = faster acceleration)
-        int ramp = 10 + val;
-        motor_set_ramp_step(ramp);
+        if (j_val) {
+            motor_set_deadzone(j_val->valuedouble);
+            ESP_LOGI(TAG, "CMD: deadzone set to %.2f", j_val->valuedouble);
+        }
+    } else if (strcmp(cmd_str, "lpf") == 0) {
+        cJSON *j_val = cJSON_GetObjectItem(root, "value");
+        if (j_val) {
+            motor_set_lpf_alpha(j_val->valuedouble);
+            ESP_LOGI(TAG, "CMD: lpf alpha set to %.2f", j_val->valuedouble);
+        }
+
     } else if (strcmp(cmd_str, "factory_reset") == 0) {
         ESP_LOGW(TAG, "Command: Factory Resetting...");
         if (response_buffer) snprintf(response_buffer, response_len, "{\"res\":\"ok\",\"msg\":\"factory_resetting\",\"type\":\"status_reset\"}");

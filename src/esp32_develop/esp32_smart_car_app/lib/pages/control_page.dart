@@ -1,7 +1,7 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_mjpeg/flutter_mjpeg.dart';
-import 'package:flutter_joystick/flutter_joystick.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:gal/gal.dart';
@@ -19,37 +19,18 @@ class ControlPage extends StatefulWidget {
 }
 
 class _ControlPageState extends State<ControlPage> {
-  DateTime _lastMoveTime = DateTime.now();
-
-  void _onDirectionMove(StickDragDetails details, CarState state) {
-    if (!state.isConnected) return;
-    final now = DateTime.now();
-    if (now.difference(_lastMoveTime).inMilliseconds < 50) return;
-    _lastMoveTime = now;
-
-    // PRD: Left joystick for direction (X-axis only)
-    state.sendCommand({
-      "cmd": "move",
-      "vx": _currentThrottle * state.maxSpeed, // Keep current throttle
-      "vy": -details.x * state.maxSpeed,       // Direction (left/right)
-      "vw": 0
-    });
-  }
-
   double _currentThrottle = 0.0;
-
-  void _onThrottleMove(double value, CarState state) {
-    if (!state.isConnected) return;
-    _currentThrottle = value;
-    
-    // PRD: Right slider/joystick for throttle (vx)
-    state.sendCommand({
-      "cmd": "move",
-      "vx": _currentThrottle * state.maxSpeed,
-      "vy": 0, // In simple throttle mode, we might not want to override direction immediately
-      "vw": 0
-    });
-  }
+  double _linearSpeedFactor = 1.0;
+  double _angularSpeedFactor = 1.0;
+  double _strafeSpeedFactor = 1.0;
+  double _lastVx = 0, _lastVy = 0, _lastVw = 0;
+  bool _pressFwd = false;
+  bool _pressBack = false;
+  bool _pressLeft = false;
+  bool _pressRight = false;
+  bool _pressStrafeLeft = false;
+  bool _pressStrafeRight = false;
+  Timer? _uTurnTimer;
 
   void _onJoystickStop(CarState state) {
     if (!state.isConnected) return;
@@ -59,6 +40,52 @@ class _ControlPageState extends State<ControlPage> {
       "vx": 0,
       "vy": 0,
       "vw": 0
+    });
+  }
+
+  void _applyMotion(CarState state) {
+    if (!state.isConnected) return;
+    if (state.mode != "MANUAL") return;
+    if (_uTurnTimer != null) return; // u-turn中，忽略组合键
+    final double v = state.maxSpeed * _linearSpeedFactor;
+    final double w = state.maxSpeed * _angularSpeedFactor;
+    final double s = state.maxSpeed * _strafeSpeedFactor;
+    double vx = 0, vy = 0, vw = 0;
+    if (_pressFwd) vx += v;
+    if (_pressBack) vx -= v;
+    if (_pressStrafeRight) vy += s;
+    if (_pressStrafeLeft) vy -= s;
+    if (_pressLeft) vw += w;
+    if (_pressRight) vw -= w;
+    _lastVx = vx; _lastVy = vy; _lastVw = vw;
+    if (vx == 0 && vy == 0 && vw == 0) {
+      state.sendCommand({"cmd": "move", "vx": 0, "vy": 0, "vw": 0});
+    } else {
+      state.sendCommand({"cmd": "move", "vx": vx, "vy": vy, "vw": vw});
+    }
+  }
+ 
+  void _setFwd(CarState state, bool v) { setState(() { _pressFwd = v; }); _applyMotion(state); }
+  void _setBack(CarState state, bool v) { setState(() { _pressBack = v; }); _applyMotion(state); }
+  void _setLeft(CarState state, bool v) { setState(() { _pressLeft = v; }); _applyMotion(state); }
+  void _setRight(CarState state, bool v) { setState(() { _pressRight = v; }); _applyMotion(state); }
+  void _setStrafeLeft(CarState state, bool v) { setState(() { _pressStrafeLeft = v; }); _applyMotion(state); }
+  void _setStrafeRight(CarState state, bool v) { setState(() { _pressStrafeRight = v; }); _applyMotion(state); }
+ 
+  void _stopMove(CarState state) {
+    if (!state.isConnected) return;
+    state.sendCommand({"cmd": "move", "vx": 0, "vy": 0, "vw": 0});
+  }
+
+  Future<void> _uTurn(CarState state, bool left) async {
+    if (!state.isConnected) return;
+    if (state.mode != "MANUAL") return;
+    _uTurnTimer?.cancel();
+    final w = state.maxSpeed * _angularSpeedFactor;
+    state.sendCommand({"cmd": "move", "vx": 0, "vy": 0, "vw": left ? w : -w});
+    _uTurnTimer = Timer(const Duration(milliseconds: 900), () {
+      _uTurnTimer = null;
+      _applyMotion(state);
     });
   }
 
@@ -135,7 +162,7 @@ class _ControlPageState extends State<ControlPage> {
       }
       videoUrl = "$host/stream/${state.deviceId}?ip=${state.cameraIp}";
     } else {
-      videoUrl = "http://${state.cameraIp}:80/stream";
+      videoUrl = "http://${state.cameraIp}:81/stream";
     }
 
     return Scaffold(
@@ -145,19 +172,27 @@ class _ControlPageState extends State<ControlPage> {
         children: [
           // Background: Video Stream
           GestureDetector(
-            onPanUpdate: (details) {
-              // Convert drag to PTZ commands
-              state.updateMixedServos(details.delta.dx * 0.1, details.delta.dy * 0.1);
-            },
-            onPanEnd: (_) => state.sendCommand({"cmd": "servo_stop", "channel": 1}),
+            onPanUpdate: state.mode == "MANUAL"
+                ? (details) {
+                    state.updateMixedServos(details.delta.dx * 0.1, details.delta.dy * 0.1);
+                  }
+                : null,
+            onPanEnd: state.mode == "MANUAL"
+                ? (_) => state.sendCommand({"cmd": "servo_stop", "channel": 1})
+                : null,
             child: InteractiveViewer(
               minScale: 1.0,
               maxScale: 5.0,
-              child: Center(
+              child: SizedBox.expand(
                 child: Mjpeg(
+                  key: ValueKey(
+                    "control-${state.isRemoteMode}-${state.cameraIp}-${state.deviceId}-${state.relayServer}-${state.isConnected}",
+                  ),
                   isLive: true,
                   stream: videoUrl,
-                  error: (context, error, stack) => const Center(child: Icon(Icons.signal_wifi_bad, color: Colors.red, size: 50)),
+                  error: (context, error, stack) => const Center(
+                    child: Icon(Icons.signal_wifi_bad, color: Colors.red, size: 50),
+                  ),
                 ),
               ),
             ),
@@ -174,6 +209,20 @@ class _ControlPageState extends State<ControlPage> {
                     top: 0, left: 0, right: 0,
                     child: _buildTopBar(state),
                   ),
+          Positioned(
+            top: 40, left: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                "vx:${_lastVx.toStringAsFixed(2)} vy:${_lastVy.toStringAsFixed(2)} vw:${_lastVw.toStringAsFixed(2)}",
+                style: GoogleFonts.shareTechMono(color: Colors.white70, fontSize: 12),
+              ),
+            ),
+          ),
 
                   // Exit Button
                   Positioned(
@@ -202,66 +251,11 @@ class _ControlPageState extends State<ControlPage> {
                     ),
                   ),
                   
-                  // Direction Joystick (Left)
                   Align(
-                    alignment: Alignment.bottomLeft,
+                    alignment: Alignment.bottomCenter,
                     child: Padding(
-                      padding: const EdgeInsets.only(left: 30, bottom: 50),
-                      child: Opacity(
-                        opacity: 0.8,
-                        child: Joystick(
-                          mode: JoystickMode.horizontal, // PRD: Direction only
-                          listener: (details) => _onDirectionMove(details, state),
-                          onStickDragEnd: () => _onJoystickStop(state),
-                          base: _buildJoystickBase(),
-                          stick: _buildJoystickStick(),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Throttle Slider (Right)
-                  Align(
-                    alignment: Alignment.bottomRight,
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 30, bottom: 50),
-                      child: Opacity(
-                        opacity: 0.8,
-                        child: Container(
-                          height: 200,
-                          width: 80,
-                          decoration: BoxDecoration(
-                            color: Colors.black26,
-                            borderRadius: BorderRadius.circular(40),
-                            border: Border.all(color: const Color(0xFF00F0FF).withValues(alpha: 0.3)),
-                          ),
-                          child: RotatedBox(
-                            quarterTurns: 3,
-                            child: SliderTheme(
-                              data: SliderTheme.of(context).copyWith(
-                                trackHeight: 10,
-                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 15),
-                                overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
-                                activeTrackColor: const Color(0xFF00F0FF),
-                                inactiveTrackColor: Colors.white10,
-                                thumbColor: const Color(0xFF00F0FF),
-                              ),
-                              child: Slider(
-                                value: _currentThrottle,
-                                min: -1.0,
-                                max: 1.0,
-                                onChanged: (val) => setState(() => _onThrottleMove(val, state)),
-                                onChangeEnd: (val) {
-                                  setState(() {
-                                    _currentThrottle = 0;
-                                    _onJoystickStop(state);
-                                  });
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                      padding: const EdgeInsets.only(bottom: 80),
+                      child: _buildDirectionPad(state),
                     ),
                   ),
 
@@ -326,32 +320,116 @@ class _ControlPageState extends State<ControlPage> {
     );
   }
 
-  Widget _buildJoystickBase() {
-    return Container(
-      width: 150,
-      height: 150,
-      decoration: BoxDecoration(
-        color: Colors.black26,
-        shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFF00F0FF).withValues(alpha: 0.5), width: 2),
-      ),
+  Widget _buildDirectionPad(CarState state) {
+    final bool enabled = state.isConnected && state.mode == "MANUAL";
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        // 左侧：上排=原地左/右转, 下排=平移左/右
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                _buildHoldButton(
+                  icon: Icons.rotate_left,
+                  onPress: enabled ? () => _setLeft(state, true) : null,
+                  onRelease: enabled ? () => _setLeft(state, false) : null,
+                ),
+                const SizedBox(width: 12),
+                _buildHoldButton(
+                  icon: Icons.rotate_right,
+                  onPress: enabled ? () => _setRight(state, true) : null,
+                  onRelease: enabled ? () => _setRight(state, false) : null,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _buildHoldButton(
+                  icon: Icons.chevron_left,
+                  onPress: enabled ? () => _setStrafeLeft(state, true) : null,
+                  onRelease: enabled ? () => _setStrafeLeft(state, false) : null,
+                ),
+                const SizedBox(width: 12),
+                _buildHoldButton(
+                  icon: Icons.chevron_right,
+                  onPress: enabled ? () => _setStrafeRight(state, true) : null,
+                  onRelease: enabled ? () => _setStrafeRight(state, false) : null,
+                ),
+              ],
+            ),
+          ],
+        ),
+        // 中间：左右调头（水平排列）
+        Row(
+          children: [
+            _buildHoldButton(
+              icon: Icons.subdirectory_arrow_left,
+              onPress: enabled ? () => _uTurn(state, true) : null,
+              onRelease: enabled ? () => _stopMove(state) : null,
+            ),
+            const SizedBox(width: 12),
+            _buildHoldButton(
+              icon: Icons.subdirectory_arrow_right,
+              onPress: enabled ? () => _uTurn(state, false) : null,
+              onRelease: enabled ? () => _stopMove(state) : null,
+            ),
+          ],
+        ),
+        // 右侧：前进/后退（垂直列）
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildHoldButton(
+              icon: Icons.arrow_upward,
+              onPress: enabled ? () => _setFwd(state, true) : null,
+              onRelease: enabled ? () => _setFwd(state, false) : null,
+            ),
+            const SizedBox(height: 12),
+            _buildHoldButton(
+              icon: Icons.arrow_downward,
+              onPress: enabled ? () => _setBack(state, true) : null,
+              onRelease: enabled ? () => _setBack(state, false) : null,
+            ),
+          ],
+        ),
+      ],
     );
   }
 
-  Widget _buildJoystickStick() {
-    return Container(
-      width: 60,
-      height: 60,
-      decoration: BoxDecoration(
-        color: const Color(0xFF00F0FF).withValues(alpha: 0.7),
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF00F0FF).withValues(alpha: 0.3),
-            blurRadius: 10,
-            spreadRadius: 2,
+  Widget _buildHoldButton({
+    required IconData icon,
+    required VoidCallback? onPress,
+    required VoidCallback? onRelease,
+  }) {
+    final bool isEnabled = onPress != null && onRelease != null;
+    return Listener(
+      onPointerDown: (_) {
+        if (isEnabled) onPress();
+      },
+      onPointerUp: (_) {
+        if (isEnabled) onRelease();
+      },
+      onPointerCancel: (_) {
+        if (isEnabled) onRelease();
+      },
+      child: Container(
+        width: 64,
+        height: 64,
+        decoration: BoxDecoration(
+          color: isEnabled ? Colors.black45 : Colors.black26,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFF00F0FF).withValues(alpha: isEnabled ? 0.8 : 0.2),
           ),
-        ],
+        ),
+        child: Icon(
+          icon,
+          color: isEnabled ? const Color(0xFF00F0FF) : Colors.grey,
+          size: 32,
+        ),
       ),
     );
   }

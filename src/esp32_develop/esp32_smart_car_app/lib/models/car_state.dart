@@ -44,12 +44,10 @@ class CarState extends ChangeNotifier {
   Timer? _autoConnectTimer;
   
   // Control State
-  double maxSpeed = 0.7; 
-  double patrolSpeed = 0.4;
+  double maxSpeed = 1.0; 
+  double patrolSpeed = 0.5;
   String sensitivity = "Medium";
-  double steeringSensitivity = 0.5; // PRD: 转向灵敏度
-  double accelerationSmoothness = 0.5; // PRD: 加速平滑度
-  int speedLevel = 1; 
+  int speedLevel = 2; 
   double ultrasonicAngle = 90.0;
   
   // Vision State
@@ -205,12 +203,14 @@ class CarState extends ChangeNotifier {
     maxSpeed = prefs.getDouble('max_speed') ?? 0.7;
     patrolSpeed = prefs.getDouble('patrol_speed') ?? 0.4;
     sensitivity = prefs.getString('sensitivity') ?? "Medium";
-    steeringSensitivity = prefs.getDouble('steering_sensitivity') ?? 0.5;
-    accelerationSmoothness = prefs.getDouble('acceleration_smoothness') ?? 0.5;
     resolution = prefs.getString('resolution') ?? "1080P";
     nightMode = prefs.getString('night_mode') ?? "Auto";
     aiDetection = prefs.getString('ai_detection') ?? "All";
     detectionSensitivity = prefs.getDouble('detection_sensitivity') ?? 0.75;
+    
+    if (cameraIp.isEmpty && carIp.isNotEmpty) {
+      cameraIp = carIp;
+    }
     
     notifyListeners();
   
@@ -297,8 +297,6 @@ class CarState extends ChangeNotifier {
     double? newMaxSpeed,
     double? newPatrolSpeed,
     String? newSensitivity,
-    double? newSteeringSensitivity,
-    double? newAccelerationSmoothness,
     String? newResolution,
     String? newNightMode,
     String? newAiDetection,
@@ -348,16 +346,6 @@ class CarState extends ChangeNotifier {
     if (newSensitivity != null) {
       await prefs.setString('sensitivity', newSensitivity);
       sensitivity = newSensitivity;
-    }
-    if (newSteeringSensitivity != null) {
-      await prefs.setDouble('steering_sensitivity', newSteeringSensitivity);
-      steeringSensitivity = newSteeringSensitivity;
-      sendCommand({"cmd": "steering", "value": (steeringSensitivity * 100).toInt()});
-    }
-    if (newAccelerationSmoothness != null) {
-      await prefs.setDouble('acceleration_smoothness', newAccelerationSmoothness);
-      accelerationSmoothness = newAccelerationSmoothness;
-      sendCommand({"cmd": "accel", "value": (accelerationSmoothness * 100).toInt()});
     }
     if (newResolution != null) {
       await prefs.setString('resolution', newResolution);
@@ -601,8 +589,6 @@ class CarState extends ChangeNotifier {
       sendCommand({"cmd": "servo", "channel": 0, "angle": ultrasonicAngle});
       sendCommand({"cmd": "servo_stop", "channel": 1});
       sendCommand({"cmd": "speed", "value": (maxSpeed * 100).toInt()});
-      sendCommand({"cmd": "steering", "value": (steeringSensitivity * 100).toInt()});
-      sendCommand({"cmd": "accel", "value": (accelerationSmoothness * 100).toInt()});
       
       _startPing();
       
@@ -704,13 +690,13 @@ class CarState extends ChangeNotifier {
   }
 
   void sendCommand(Map<String, dynamic> cmd) {
-    // PRD: Unlock all control permissions ONLY after successful binding
-    // Allow 'ping' and 'ota_start' even if not bound (for system maintenance)
+    // Allow control commands even if not bound, but still block sensitive commands
     final String? commandName = cmd['cmd']?.toString();
-    final List<String> allowedUnboundCommands = ['ping']; 
+    final List<String> sensitiveCommands = ['ota_start', 'factory_reset', 'reset', 'restart', 'reboot', 'set_relay'];
     
-    if (!isBound && commandName != null && !allowedUnboundCommands.contains(commandName)) {
-      debugPrint("Command blocked: Device not bound. Command: $commandName");
+    // Block sensitive commands if not bound
+    if (!isBound && commandName != null && sensitiveCommands.contains(commandName)) {
+      debugPrint("Sensitive command blocked: Device not bound. Command: $commandName");
       return;
     }
 

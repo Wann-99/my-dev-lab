@@ -200,6 +200,12 @@ abstract class AppLocalizations {
   /// **'Network Settings'**
   String get networkSettings;
 
+  /// No description provided for @ipInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'IP Info'**
+  String get ipInfo;
+
   /// No description provided for @carIpAddress.
   ///
   /// In en, this message translates to:

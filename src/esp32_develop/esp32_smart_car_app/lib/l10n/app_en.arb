@@ -19,6 +19,7 @@
   "save": "Save",
   "saved": "Saved",
   "networkSettings": "Network Settings",
+  "ipInfo": "IP Info",
   "carIpAddress": "Car IP Address",
   "cameraIpAddress": "Camera IP Address",
   "discoveredDevices": "Discovered Devices",
