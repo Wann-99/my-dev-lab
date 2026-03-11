@@ -1,0 +1,3 @@
+[submodule "src/esp32_develop/esp32_smart_car_app/ota_updates"]
+	path = src/esp32_develop/esp32_smart_car_app/ota_updates
+	url = git@github.com:Wann-99/esp32_smart_car_updates.git
