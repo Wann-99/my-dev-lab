@@ -60,20 +60,26 @@ if (Test-Path $localJsonPath) {
     # 5. 自动执行 Git 提交与推送
     Write-Host ">>> 正在推送更新到 GitHub..." -ForegroundColor Cyan
     try {
-        # 统一使用主项目的 Git 进行管理，只提交 version.json 相关的变动
-        git add ota_updates/version.json
+        # 记录当前目录，进入 ota_updates 目录执行 git 操作
+        # 这样即便 ota_updates 是一个独立的子模块或仓库也能正常工作
+        $currentDir = Get-Location
+        cd ota_updates
+        
+        git add version.json
         git commit -m "release: v$Version (build $newBuildNumber)"
         
-        # 尝试推送
-        $pushResult = git push origin main 2>&1
+        # 尝试推送并自动设置上游分支（解决首次推送失败问题）
+        $pushResult = git push -u origin main 2>&1
         if ($LASTEXITCODE -ne 0) {
             throw "Git Push Failed: $pushResult"
         }
         
+        cd $currentDir
         Write-Host ">>> GitHub 元数据已成功推送！" -ForegroundColor Green
     } catch {
+        cd $currentDir
         Write-Host "!!! Git 推送失败: $($_.Exception.Message)" -ForegroundColor Red
-        Write-Host "提示: 请检查网络连接或远程仓库权限。" -ForegroundColor Yellow
+        Write-Host "提示: 请确保已在 ota_updates 目录运行过 git remote add origin <URL>" -ForegroundColor Yellow
     }
 } else {
     Write-Host "!!! 未找到 ./ota_updates/version.json，请确保该文件夹和文件存在。" -ForegroundColor Yellow
