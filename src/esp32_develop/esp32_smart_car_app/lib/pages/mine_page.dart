@@ -38,7 +38,12 @@ class MinePage extends StatelessWidget {
               SliverAppBar.large(
                 title: Text(
                   l10n.mine, 
-                  style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5, color: Colors.white)
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold, 
+                    letterSpacing: 0.5, 
+                    color: Colors.white,
+                    shadows: [Shadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+                  )
                 ),
                 backgroundColor: Colors.transparent,
                 elevation: 0,
@@ -193,27 +198,44 @@ class MinePage extends StatelessWidget {
                     style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF333333), letterSpacing: 0.5)
                   ),
                   const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Icon(
-                        state.isBound ? Icons.link_rounded : Icons.link_off_rounded,
-                        size: 16,
-                        color: state.isBound ? primaryColor : const Color(0xFF999999),
-                      ),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          state.isBound ? "${l10n.boundDevice}: ${state.deviceId}" : l10n.unbound,
-                          style: TextStyle(
-                            color: state.isBound ? primaryColor : const Color(0xFF999999),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
+                  state.isBound 
+                    ? Align(
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: primaryColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          overflow: TextOverflow.ellipsis,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.link_rounded, size: 14, color: primaryColor),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  state.deviceId,
+                                  style: TextStyle(
+                                    color: primaryColor,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : Text(
+                        l10n.unbound,
+                        style: const TextStyle(
+                          color: Color(0xFF999999),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                    ],
-                  ),
                 ],
               ),
             ),

@@ -34,6 +34,68 @@ class CarState extends ChangeNotifier {
   double carBattery = 0.0; // Voltage
   int wifiSignal = -1; // dBm
   int latency = 0; // ms
+  
+  // Battery Calculation (2S LiPo: 6.8V - 8.4V)
+  // R1=220k, R2=100k, Max 8.4V -> 2.625V ADC
+  double get batteryPercentage {
+    if (carBattery <= 0) return 0.0;
+    
+    // 2S LiPo Discharge Curve Mapping (More realistic than linear)
+    // 8.4V = 100%, 7.4V = 50%, 6.8V = 0%
+    const double maxV = 8.4;
+    const double midV = 7.4;
+    const double minV = 6.8;
+    
+    double pct;
+    if (carBattery >= midV) {
+      // 7.4V - 8.4V -> 50% - 100%
+      pct = 0.5 + (carBattery - midV) / (maxV - midV) * 0.5;
+    } else {
+      // 6.8V - 7.4V -> 0% - 50%
+      pct = (carBattery - minV) / (midV - minV) * 0.5;
+    }
+    
+    return pct.clamp(0.0, 1.0);
+  }
+
+  // Voltage Calibration
+  double voltageCalibration = 1.0;
+  bool useVoltageDivider = false;
+  final List<double> _voltageBuffer = [];
+  double _smoothedVoltage = 0.0;
+  
+  void _updateVoltage(double rawVoltage) {
+    // Apply voltage divider multiplier (R1=220k, R2=100k => x3.2)
+    double baseVoltage = rawVoltage;
+    if (useVoltageDivider) {
+      baseVoltage = rawVoltage * 3.2;
+    }
+    
+    // Apply calibration
+    double calibrated = baseVoltage * voltageCalibration;
+    
+    // Exponential Moving Average (EMA) + Moving Average Buffer
+    // Window size 30 for high stability (approx 15 seconds of data at 2Hz)
+    _voltageBuffer.add(calibrated);
+    if (_voltageBuffer.length > 30) {
+      _voltageBuffer.removeAt(0);
+    }
+    
+    double sum = _voltageBuffer.reduce((a, b) => a + b);
+    double avg = sum / _voltageBuffer.length;
+    
+    // Apply EMA to the average for double smoothing
+    if (_smoothedVoltage == 0) {
+      _smoothedVoltage = avg;
+    } else {
+      const double alpha = 0.15; // Lower = smoother, higher = faster
+      _smoothedVoltage = (_smoothedVoltage * (1 - alpha)) + (avg * alpha);
+    }
+    
+    // Keep internal precision for percentage, but round for display
+    carBattery = _smoothedVoltage;
+    notifyListeners();
+  }
   DateTime? _lastPingTime;
   Timer? _pingTimer;
   Timer? _heartbeatCheckTimer;
@@ -205,6 +267,8 @@ class CarState extends ChangeNotifier {
     nightMode = prefs.getString('night_mode') ?? "Auto";
     aiDetection = prefs.getString('ai_detection') ?? "All";
     detectionSensitivity = prefs.getDouble('detection_sensitivity') ?? 0.75;
+    voltageCalibration = prefs.getDouble('voltage_calibration') ?? 1.0;
+    useVoltageDivider = prefs.getBool('use_voltage_divider') ?? false;
     showEmergencyStop = prefs.getBool('show_emergency_stop') ?? true;
     
     if (cameraIp.isEmpty && carIp.isNotEmpty) {
@@ -306,8 +370,20 @@ class CarState extends ChangeNotifier {
     bool? newIsRemoteMode,
     bool? newShowFloatingBall,
     bool? newShowEmergencyStop,
+    double? newVoltageCalibration,
+    bool? newUseVoltageDivider,
   }) async {
     final prefs = await SharedPreferences.getInstance();
+    
+    if (newUseVoltageDivider != null) {
+      await prefs.setBool('use_voltage_divider', newUseVoltageDivider);
+      useVoltageDivider = newUseVoltageDivider;
+    }
+    
+    if (newVoltageCalibration != null) {
+      await prefs.setDouble('voltage_calibration', newVoltageCalibration);
+      voltageCalibration = newVoltageCalibration;
+    }
     
     if (newRelayServer != null) {
       await prefs.setString('relay_server', newRelayServer);
@@ -392,39 +468,32 @@ class CarState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Mixed Control (Virtual Joystick)
-  void updateMixedServos(double x, double y) {
-    // x, y are from -1.0 to 1.0
-    double sensitivity = 3.0;
+  // PTZ Control (Dual 180 Servo)
+  void updatePtz(double x, double y) {
+    // x, y are from -1.0 to 1.0 (Joystick input)
+    // x controls Channel 0 (Pan), y controls Channel 1 (Tilt)
     
-    // X Axis: Ultrasonic Servo (Channel 0) - Position Control (Standard Servo)
+    double sensitivity = 2.0;
+    
+    // Pan (Ch0)
     if (x.abs() > 0.1) {
       ultrasonicAngle = (ultrasonicAngle + (x * sensitivity)).clamp(0.0, 180.0);
-      sendCommand({"cmd": "servo", "channel": 0, "angle": ultrasonicAngle});
+      sendCommand({"cmd": "servo", "channel": 0, "angle": ultrasonicAngle.toInt()});
     }
-
-    // Y Axis: Camera Servo (Channel 1) - Speed Control (SG90 360 Continuous)
-    double minSpeedOffsetUp = 10.0; 
-    double varSpeedRangeUp = 15.0;
-    double minSpeedOffsetDown = 1.0; 
-    double varSpeedRangeDown = 4.0;  
-
+    
+    // Tilt (Ch1) - Inverted Y usually feels more natural (Up on stick = Camera Up)
+    // But servo mapping depends on mounting. Let's assume standard.
     if (y.abs() > 0.1) {
-      double speedFactor = -y; 
-      double targetSpeedAngle = 90.0;
-      
-      if (speedFactor > 0) {
-        targetSpeedAngle = 90.0 + minSpeedOffsetUp + (speedFactor * varSpeedRangeUp);
-      } else {
-        targetSpeedAngle = 90.0 - minSpeedOffsetDown + (speedFactor * varSpeedRangeDown);
-      }
-      
-      sendCommand({"cmd": "servo", "channel": 1, "angle": targetSpeedAngle.clamp(0.0, 180.0)});
-    } else {
-      sendCommand({"cmd": "servo_stop", "channel": 1});
+      cameraAngle = (cameraAngle + (y * sensitivity)).clamp(0.0, 180.0);
+      sendCommand({"cmd": "servo", "channel": 1, "angle": cameraAngle.toInt()});
     }
     
     notifyListeners();
+  }
+
+  // Legacy mixed control (keeping for compatibility if needed, but redirecting to new logic)
+  void updateMixedServos(double x, double y) {
+    updatePtz(x, y);
   }
 
   void resetServos() {
@@ -453,9 +522,23 @@ class CarState extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Mode change tracking to prevent UI flicker
+  DateTime _lastModeChangeTime = DateTime.fromMillisecondsSinceEpoch(0);
+
   void setCarMode(String newMode) {
     if (isConnected) {
-      sendCommand({"cmd": "mode", "value": newMode.toUpperCase()});
+      _lastModeChangeTime = DateTime.now();
+      final modeUpper = newMode.toUpperCase();
+      mode = modeUpper; // Optimistic update for immediate UI feedback
+      sendCommand({"cmd": "mode", "value": modeUpper});
+
+      // Safety: Only stop the car if switching TO Manual mode.
+      // If switching TO Auto, let the car's autonomous logic take over.
+      if (modeUpper == "MANUAL") {
+        emergencyStop();
+      }
+
+      notifyListeners();
     }
   }
 
@@ -610,6 +693,14 @@ class CarState extends ChangeNotifier {
         (message) {
           try {
             final data = jsonDecode(message);
+            
+            // Handle Ping/Pong separately from status messages
+            if (data['res'] == 'pong' && _lastPingTime != null) {
+              latency = DateTime.now().difference(_lastPingTime!).inMilliseconds;
+              notifyListeners();
+              return;
+            }
+
             if (data['type'] == 'status') {
               _lastHeartbeatTime = DateTime.now(); // Update heartbeat on any status message
               
@@ -624,7 +715,16 @@ class CarState extends ChangeNotifier {
                 distance = data['dist_f'].toString();
               }
               
-              if (data['mode'] != null) mode = data['mode'].toString().toUpperCase();
+              if (data['mode'] != null) {
+                final newMode = data['mode'].toString().toUpperCase();
+                // Only sync hardware mode if not manually changed recently (within 2s)
+                if (DateTime.now().difference(_lastModeChangeTime).inSeconds > 2) {
+                  if (mode != newMode) {
+                    mode = newMode;
+                    notifyListeners();
+                  }
+                }
+              }
               if (data.containsKey('cam_ip') || data.containsKey('camIP')) {
                 String? newIp = data['cam_ip'] ?? data['camIP'];
                 if (newIp != null && newIp != "0.0.0.0" && newIp != cameraIp) {
@@ -634,13 +734,10 @@ class CarState extends ChangeNotifier {
                   });
                 }
               }
-              if (data['v_car'] != null) carBattery = (data['v_car'] as num).toDouble();
-              if (data['rssi'] != null) wifiSignal = (data['rssi'] as num).toInt();
-              
-              // If device sends back a timestamp for ping
-              if (data['pong'] != null && _lastPingTime != null) {
-                latency = DateTime.now().difference(_lastPingTime!).inMilliseconds;
+              if (data['v_car'] != null) {
+                _updateVoltage((data['v_car'] as num).toDouble());
               }
+              if (data['rssi'] != null) wifiSignal = (data['rssi'] as num).toInt();
               
               notifyListeners();
             }

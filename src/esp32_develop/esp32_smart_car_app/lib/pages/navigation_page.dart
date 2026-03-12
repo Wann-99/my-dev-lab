@@ -34,8 +34,13 @@ class NavigationPage extends StatelessWidget {
             slivers: [
               SliverAppBar.large(
                 title: Text(
-                  l10n.navigation, 
-                  style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5, color: Colors.white)
+                  l10n.device, 
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold, 
+                    letterSpacing: 0.5, 
+                    color: Colors.white,
+                    shadows: [Shadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+                  )
                 ),
                 backgroundColor: Colors.transparent,
                 elevation: 0,
@@ -43,13 +48,15 @@ class NavigationPage extends StatelessWidget {
                 pinned: true,
               ),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 100), // Extra bottom padding
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 120), // Increased bottom padding to ensure scroll
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     _buildDeviceStatusCard(context, state, l10n),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
                     _buildBindingSection(context, state, l10n),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 40),
+                    // Add some dummy content or large spacer to ensure scrollability
+                    const SizedBox(height: 400), 
                   ]),
                 ),
               ),

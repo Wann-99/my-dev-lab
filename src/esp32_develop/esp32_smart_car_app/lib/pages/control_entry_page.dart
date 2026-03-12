@@ -13,7 +13,6 @@ class ControlEntryPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<CarState>();
     final l10n = AppLocalizations.of(context)!;
-    final bool canControl = state.isConnected;
 
     final String previewUrl;
     if (state.isRemoteMode) {
@@ -52,7 +51,12 @@ class ControlEntryPage extends StatelessWidget {
               SliverAppBar.large(
                 title: Text(
                   l10n.control, 
-                  style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5, color: Colors.white)
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold, 
+                    letterSpacing: 0.5, 
+                    color: Colors.white,
+                    shadows: [Shadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+                  )
                 ),
                 backgroundColor: Colors.transparent,
                 elevation: 0,
@@ -66,19 +70,13 @@ class ControlEntryPage extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          flex: 2,
-                          child: _buildControlCard(
-                            context,
-                            l10n.emergencyStop,
-                            Icons.warning_rounded,
-                            Colors.redAccent,
-                            canControl ? () => state.emergencyStop() : null,
-                          ),
+                          flex: 1,
+                          child: _buildModeToggleCard(context, state, l10n),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          flex: 3,
-                          child: _buildModeToggleCard(context, state, l10n),
+                          flex: 1,
+                          child: _buildTopStartControlButton(context, state, l10n),
                         ),
                       ],
                     ),
@@ -93,9 +91,7 @@ class ControlEntryPage extends StatelessWidget {
                     _buildVideoContainer(context, state, previewUrl, previewHeight, l10n),
                     const SizedBox(height: 24),
                     _buildStatusGrid(context, state, l10n),
-                    const SizedBox(height: 32),
-                    _buildStartControlButton(context, state, l10n),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 100), // Padding bottom for scroll
                   ]),
                 ),
               ),
@@ -106,33 +102,51 @@ class ControlEntryPage extends StatelessWidget {
     );
   }
 
-  Widget _buildControlCard(BuildContext context, String title, IconData icon, Color color, VoidCallback? onTap) {
+  Widget _buildTopStartControlButton(BuildContext context, CarState state, AppLocalizations l10n) {
+    final bool canStart = state.isConnected && state.mode == 'MANUAL';
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    
     return InkWell(
-      onTap: onTap,
+      onTap: canStart ? () async {
+        await SystemChrome.setPreferredOrientations([
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
+        if (context.mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const ControlPage()),
+          ).then((_) {
+            SystemChrome.setPreferredOrientations([
+              DeviceOrientation.portraitUp,
+            ]);
+          });
+        }
+      } : null,
       borderRadius: BorderRadius.circular(24),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+        padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.85), // Glass
+          color: canStart ? primaryColor : Colors.white.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: color.withValues(alpha: 0.1),
+              color: canStart ? primaryColor.withValues(alpha: 0.3) : Colors.black12,
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
           ],
-          border: Border.all(color: color.withValues(alpha: 0.2), width: 1.2),
         ),
-        child: Column(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 8),
-            FittedBox(
-              child: Text(
-                title,
-                style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12),
-                textAlign: TextAlign.center,
+            Icon(Icons.play_circle_fill_rounded, color: canStart ? Colors.white : Colors.grey, size: 24),
+            const SizedBox(width: 8),
+            Text(
+              l10n.startControl,
+              style: TextStyle(
+                color: canStart ? Colors.white : Colors.grey,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
               ),
             ),
           ],
@@ -142,52 +156,48 @@ class ControlEntryPage extends StatelessWidget {
   }
 
   Widget _buildModeToggleCard(BuildContext context, CarState state, AppLocalizations l10n) {
-    final isManual = state.mode == 'MANUAL';
+    final isAuto = state.mode == 'AUTO';
     final primaryColor = Theme.of(context).colorScheme.primary;
     
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.85), // Glass
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFE0E0E0).withValues(alpha: 0.5),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  height: 32,
-                  child: Switch(
-                    value: isManual,
-                    onChanged: state.isConnected 
-                      ? (v) => state.setCarMode(v ? 'MANUAL' : 'AUTO')
-                      : null,
-                    activeThumbColor: Colors.white,
-                    activeTrackColor: primaryColor,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  isManual ? l10n.manual : l10n.auto,
-                  style: const TextStyle(
-                    color: Color(0xFF999999),
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
+    return InkWell(
+      onTap: state.isConnected 
+        ? () => state.setCarMode(isAuto ? 'MANUAL' : 'AUTO')
+        : null,
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.85), // Glass
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFE0E0E0).withValues(alpha: 0.5),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
-          ),
-        ],
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              isAuto ? l10n.auto : l10n.manual,
+              style: TextStyle(
+                color: isAuto ? primaryColor : Colors.grey,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            IgnorePointer( // Ignore pointer for switch so InkWell handles tap
+              child: Switch(
+                value: isAuto,
+                onChanged: (_) {}, // Handled by InkWell
+                activeThumbColor: Colors.white,
+                activeTrackColor: primaryColor,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -268,7 +278,7 @@ class ControlEntryPage extends StatelessWidget {
         children: [
           _buildStatusItem(l10n.mode, state.mode == 'MANUAL' ? l10n.manual : l10n.auto, Icons.grid_view_rounded, const Color(0xFF29B6F6)),
           _buildStatusItem(l10n.distance, "${state.distance}cm", Icons.radar_rounded, const Color(0xFF66BB6A)),
-          _buildStatusItem(l10n.battery, "${state.carBattery}V", Icons.battery_charging_full_rounded, const Color(0xFFFFB74D)),
+          _buildStatusItem(l10n.battery, "${state.carBattery.toStringAsFixed(1)}V", Icons.battery_charging_full_rounded, const Color(0xFFFFB74D)),
           _buildStatusItem(l10n.signal, "${state.wifiSignal}dBm", Icons.wifi_rounded, const Color(0xFFAB47BC)),
         ],
       ),
@@ -283,44 +293,6 @@ class ControlEntryPage extends StatelessWidget {
         Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF333333))),
         Text(label, style: const TextStyle(color: Color(0xFF999999), fontSize: 11, fontWeight: FontWeight.w500)),
       ],
-    );
-  }
-
-  Widget _buildStartControlButton(BuildContext context, CarState state, AppLocalizations l10n) {
-    final bool canStart = state.isConnected && state.mode == 'MANUAL';
-    final primaryColor = Theme.of(context).colorScheme.primary;
-    
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: canStart ? () async {
-          await SystemChrome.setPreferredOrientations([
-            DeviceOrientation.landscapeLeft,
-            DeviceOrientation.landscapeRight,
-          ]);
-          if (context.mounted) {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ControlPage()),
-            ).then((_) {
-              SystemChrome.setPreferredOrientations([
-                DeviceOrientation.portraitUp,
-              ]);
-            });
-          }
-        } : null,
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          backgroundColor: canStart ? primaryColor : const Color(0xFFF5F5F5),
-          foregroundColor: canStart ? Colors.white : const Color(0xFFCCCCCC),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          elevation: canStart ? 4 : 0,
-          shadowColor: primaryColor.withValues(alpha: 0.4),
-        ),
-        child: Text(
-          l10n.startControl.toUpperCase(),
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.5),
-        ),
-      ),
     );
   }
 }

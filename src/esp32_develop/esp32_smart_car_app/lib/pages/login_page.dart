@@ -200,24 +200,28 @@ class _LoginPageState extends State<LoginPage> {
               children: [
                 Hero(
                   tag: 'app_icon',
-                  child: Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(
-                          color: primaryColor.withValues(alpha: 0.2),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
+                  child: Center(
+                    child: Container(
+                      width: 120,
+                      height: 120,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(
+                            color: primaryColor.withValues(alpha: 0.15),
+                            blurRadius: 30,
+                            spreadRadius: 2,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: ClipOval(
+                        child: Image.asset(
+                          'assets/icon.png', 
+                          fit: BoxFit.contain, // Show full logo
                         ),
-                      ],
-                    ),
-                    child: ClipOval(
-                      child: Image.asset(
-                        'assets/icon.png', 
-                        height: 100, 
-                        width: 100,
-                        fit: BoxFit.cover,
                       ),
                     ),
                   ),

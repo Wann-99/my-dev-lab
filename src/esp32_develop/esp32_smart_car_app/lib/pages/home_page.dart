@@ -11,6 +11,9 @@ class HomePage extends StatelessWidget {
     final state = context.watch<CarState>();
     final l10n = AppLocalizations.of(context)!;
     
+    // Light Theme Colors (Restored)
+    const cardColor = Colors.white; // Glass effect handled in components if needed, or just white
+    
     return Scaffold(
       backgroundColor: Colors.transparent, // Allow gradient to show through if wrapped
       body: Container(
@@ -37,7 +40,7 @@ class HomePage extends StatelessWidget {
                 pinned: true,
                 stretch: true,
                 title: Text(
-                  l10n.appTitle, 
+                  l10n.appTitle, // "RoboCar-A"
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     letterSpacing: 0.5,
@@ -53,9 +56,9 @@ class HomePage extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 100), // Extra bottom padding for fab/nav
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                    _buildLargeControlCard(context, state, l10n),
+                    _buildLargeControlCard(context, state, l10n, cardColor),
                     const SizedBox(height: 16),
-                    _buildDashboardGrid(context, state, l10n),
+                    _buildDashboardGrid(context, state, l10n, cardColor),
                     const SizedBox(height: 20),
                   ]),
                 ),
@@ -67,19 +70,14 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildLargeControlCard(BuildContext context, CarState state, AppLocalizations l10n) {
+  Widget _buildLargeControlCard(BuildContext context, CarState state, AppLocalizations l10n, Color cardColor) {
     final isConnected = state.isConnected;
-    
-    // Battery calculation (Assume 3S LiPo: 10.5V - 12.6V)
-    double batteryPct = 0.0;
-    if (state.carBattery > 0) {
-      batteryPct = ((state.carBattery - 10.5) / (12.6 - 10.5)).clamp(0.0, 1.0);
-    }
+    final batteryPct = state.batteryPercentage;
     
     return Container(
-      height: 140,
+      height: 160,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.85), // Glass effect
+        color: cardColor.withValues(alpha: 0.85), // Glass effect
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
@@ -95,7 +93,7 @@ class HomePage extends StatelessWidget {
           onTap: () {}, // Navigate to detail?
           borderRadius: BorderRadius.circular(24),
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(24),
             child: Row(
               children: [
                 SizedBox(
@@ -125,46 +123,48 @@ class HomePage extends StatelessWidget {
                         width: 64, // Slightly smaller to fit inside ring
                         height: 64,
                         decoration: BoxDecoration(
-                          color: isConnected ? const Color(0xFFE1F5FE) : const Color(0xFFFFEBEE),
+                          color: const Color(0xFFE1F5FE), // Light Blue circle background
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(
-                          isConnected ? Icons.directions_car_rounded : Icons.car_crash_rounded,
-                          size: 32,
-                          color: isConnected ? const Color(0xFF29B6F6) : const Color(0xFFFF5252),
+                        child: Center(
+                          child: Icon(
+                            isConnected ? Icons.directions_car_rounded : Icons.car_crash_rounded,
+                            size: 32,
+                            color: const Color(0xFF29B6F6), // Blue icon
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 20),
+                const SizedBox(width: 24),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        l10n.device, // "RoboCar-A"
+                        l10n.device, // "Device" or "RoboCar-A"
                         style: const TextStyle(
-                          fontSize: 18,
+                          fontSize: 20,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF333333),
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        isConnected ? l10n.deviceOnline : l10n.deviceOffline,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: isConnected ? const Color(0xFF29B6F6) : const Color(0xFFFF5252),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
                       const SizedBox(height: 4),
                       Text(
-                        isConnected ? "${l10n.battery} ${state.carBattery}V (${(batteryPct * 100).toInt()}%)" : l10n.pleaseConnect,
+                        isConnected ? "Connected" : "Disconnected",
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 22,
+                          color: Color(0xFF333333),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        isConnected ? "Battery: ${state.carBattery.toStringAsFixed(1)}V (${(batteryPct * 100).toInt()}%)" : "No Connection",
+                        style: const TextStyle(
+                          fontSize: 14,
                           color: Color(0xFF999999),
                         ),
                       ),
@@ -179,52 +179,52 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildDashboardGrid(BuildContext context, CarState state, AppLocalizations l10n) {
+  Widget _buildDashboardGrid(BuildContext context, CarState state, AppLocalizations l10n, Color cardColor) {
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisCount: 2,
       mainAxisSpacing: 12,
       crossAxisSpacing: 12,
-      childAspectRatio: 1.5, // Wider cards like Mi Home small cards
+      childAspectRatio: 1.1, 
       children: [
         _buildSmallCard(
-          l10n.signal, 
+          "WiFi Signal", 
           "${state.wifiSignal} dBm", 
-          Icons.wifi_rounded, 
-          const Color(0xFF42A5F5),
-          state.isConnected,
+          Icons.wifi, 
+          const Color(0xFF42A5F5), // Blue
+          cardColor,
+        ),
+        _buildSmallCard(
+          "Latency", 
+          "${state.latency} ms", 
+          Icons.timer_outlined, 
+          const Color(0xFFFFB74D), // Orange
+          cardColor,
         ),
         _buildSmallCard(
           l10n.distance, 
-          "${state.distance} cm", 
-          Icons.radar_rounded, 
-          const Color(0xFF66BB6A),
-          state.isConnected,
+          state.distance == "--" ? "--" : "${state.distance} cm", 
+          Icons.radar, 
+          const Color(0xFF66BB6A), // Green
+          cardColor,
         ),
         _buildSmallCard(
           l10n.mode, 
-          state.mode == 'MANUAL' ? l10n.manual : l10n.auto, 
-          Icons.settings_remote_rounded, 
-          const Color(0xFFAB47BC),
-          state.isConnected,
-        ),
-        _buildSmallCard(
-          "Camera", 
-          state.cameraIp.isNotEmpty ? "Online" : "Offline", 
-          Icons.videocam_rounded, 
-          const Color(0xFFFF7043),
-          state.isConnected,
+          state.mode, 
+          Icons.gamepad, 
+          const Color(0xFFAB47BC), // Purple
+          cardColor,
         ),
       ],
     );
   }
 
-  Widget _buildSmallCard(String title, String value, IconData icon, Color color, bool isEnabled) {
+  Widget _buildSmallCard(String title, String value, IconData icon, Color iconColor, Color cardColor) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.85),
+        color: cardColor.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -238,13 +238,13 @@ class HomePage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Icon(icon, color: isEnabled ? color : const Color(0xFFCCCCCC), size: 28),
-              if (!isEnabled)
-                const Icon(Icons.error_outline_rounded, size: 16, color: Color(0xFFCCCCCC)),
-            ],
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: iconColor, size: 24),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -252,19 +252,19 @@ class HomePage extends StatelessWidget {
               Text(
                 title,
                 style: const TextStyle(
-                  color: Color(0xFF333333),
+                  color: Color(0xFF666666),
                   fontSize: 14,
-                  fontWeight: FontWeight.bold,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 6),
               Text(
                 value,
-                style: TextStyle(
-                  color: isEnabled ? const Color(0xFF666666) : const Color(0xFFCCCCCC),
-                  fontSize: 12,
+                style: const TextStyle(
+                  color: Color(0xFF333333),
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

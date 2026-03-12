@@ -66,9 +66,9 @@ float get_battery_voltage(void) {
     int adc_raw;
     if (adc_oneshot_read(adc1_handle, BAT_ADC_CHAN, &adc_raw) == ESP_OK) {
         // Simple conversion: 3.3V ref, 12-bit (4095)
-        // Voltage Divider Factor: Assuming 1:3 ratio (12V -> 3V) -> x4
+        // Voltage Divider Factor: R1=220k, R2=100k -> (220+100)/100 = 3.2
         // Adjust this factor based on real hardware resistors!
-        return (adc_raw * 3.3f / 4095.0f) * 4.0f;
+        return (adc_raw * 3.3f / 4095.0f) * 3.2f;
     }
     return 0.0f;
 }

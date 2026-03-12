@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:gal/gal.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_joystick/flutter_joystick.dart';
 import '../l10n/app_localizations.dart';
 import '../models/car_state.dart';
 import 'device_config_page.dart';
@@ -22,61 +23,75 @@ class _ControlPageState extends State<ControlPage> {
   final double _linearSpeedFactor = 1.0;
   final double _angularSpeedFactor = 1.0;
   final double _strafeSpeedFactor = 1.0;
+  
+  // Motion State
   double _lastVx = 0, _lastVy = 0, _lastVw = 0;
-  bool _pressFwd = false;
-  bool _pressBack = false;
+  bool _pressUp = false;
+  bool _pressDown = false;
   bool _pressLeft = false;
   bool _pressRight = false;
-  bool _pressStrafeLeft = false;
-  bool _pressStrafeRight = false;
-  Timer? _uTurnTimer;
+  
+  // UI State
+  bool _showPtzJoystick = false;
 
   void _applyMotion(CarState state) {
     if (!state.isConnected) return;
     if (state.mode != "MANUAL") return;
-    if (_uTurnTimer != null) return; // u-turn中，忽略组合键
+
     final double v = state.maxSpeed * _linearSpeedFactor;
-    final double w = state.maxSpeed * _angularSpeedFactor;
-    final double s = state.maxSpeed * _strafeSpeedFactor;
-    double vx = 0, vy = 0, vw = 0;
-    if (_pressFwd) vx += v;
-    if (_pressBack) vx -= v;
-    if (_pressStrafeRight) vy += s;
-    if (_pressStrafeLeft) vy -= s;
-    if (_pressLeft) vw += w;
-    if (_pressRight) vw -= w;
-    _lastVx = vx; _lastVy = vy; _lastVw = vw;
-    if (vx == 0 && vy == 0 && vw == 0) {
-      state.sendCommand({"cmd": "move", "vx": 0, "vy": 0, "vw": 0});
-    } else {
+    final double w = state.maxSpeed * _angularSpeedFactor; // Angular speed (Turn)
+    final double s = state.maxSpeed * _strafeSpeedFactor; // Strafe speed
+
+    double vx = 0; // Forward/Backward
+    double vy = 0; // Left/Right Strafe
+    double vw = 0; // Turn
+
+    // 1. Calculate Forward/Backward (Y-axis linear velocity)
+    // In our coordinate system: +vx is forward, -vx is backward? 
+    // Usually standard robotics: x=forward, y=left. 
+    // Let's follow existing: "vx" was used for forward/back in previous code.
+    if (_pressUp) vx += v;
+    if (_pressDown) vx -= v;
+
+    // 2. Calculate Strafe vs Turn based on combinations
+    // Requirement: "Forward/Backward + Left/Right combination ... is Turn"
+    // "Right side is Left/Right hollow arrows for Left/Right Translation (Strafe)"
+    
+    double lateralInput = 0;
+    if (_pressLeft) lateralInput += 1; // Left button pressed
+    if (_pressRight) lateralInput -= 1; // Right button pressed
+
+    if (lateralInput != 0) {
+      if (vx != 0) {
+        // Moving Forward/Back + Lateral Input = TURN
+        // If moving forward (vx > 0): Left Input -> Turn Left (+vw)
+        // If moving backward (vx < 0): Left Input -> Turn Left (+vw) (Front steers left)
+        vw = lateralInput * w; 
+        vy = 0;
+      } else {
+        // Stationary + Lateral Input = STRAFE
+        // Left Input -> Strafe Left (+vy)
+        vy = lateralInput * s;
+        vw = 0;
+      }
+    }
+
+    // Update only if changed (to reduce traffic)
+    if (vx != _lastVx || vy != _lastVy || vw != _lastVw) {
+      _lastVx = vx; _lastVy = vy; _lastVw = vw;
       state.sendCommand({"cmd": "move", "vx": vx, "vy": vy, "vw": vw});
+    } else if (vx == 0 && vy == 0 && vw == 0 && (_lastVx != 0 || _lastVy != 0 || _lastVw != 0)) {
+       // Send stop once
+       _lastVx = 0; _lastVy = 0; _lastVw = 0;
+       state.sendCommand({"cmd": "move", "vx": 0, "vy": 0, "vw": 0});
     }
   }
  
-  void _setFwd(CarState state, bool v) { setState(() { _pressFwd = v; }); _applyMotion(state); }
-  void _setBack(CarState state, bool v) { setState(() { _pressBack = v; }); _applyMotion(state); }
+  void _setUp(CarState state, bool v) { setState(() { _pressUp = v; }); _applyMotion(state); }
+  void _setDown(CarState state, bool v) { setState(() { _pressDown = v; }); _applyMotion(state); }
   void _setLeft(CarState state, bool v) { setState(() { _pressLeft = v; }); _applyMotion(state); }
   void _setRight(CarState state, bool v) { setState(() { _pressRight = v; }); _applyMotion(state); }
-  void _setStrafeLeft(CarState state, bool v) { setState(() { _pressStrafeLeft = v; }); _applyMotion(state); }
-  void _setStrafeRight(CarState state, bool v) { setState(() { _pressStrafeRight = v; }); _applyMotion(state); }
  
-  void _stopMove(CarState state) {
-    if (!state.isConnected) return;
-    state.sendCommand({"cmd": "move", "vx": 0, "vy": 0, "vw": 0});
-  }
-
-  Future<void> _uTurn(CarState state, bool left) async {
-    if (!state.isConnected) return;
-    if (state.mode != "MANUAL") return;
-    _uTurnTimer?.cancel();
-    final w = state.maxSpeed * _angularSpeedFactor;
-    state.sendCommand({"cmd": "move", "vx": 0, "vy": 0, "vw": left ? w : -w});
-    _uTurnTimer = Timer(const Duration(milliseconds: 900), () {
-      _uTurnTimer = null;
-      _applyMotion(state);
-    });
-  }
-
   void _emergencyStop(CarState state) {
     state.sendCommand({
       "cmd": "move",
@@ -87,7 +102,7 @@ class _ControlPageState extends State<ControlPage> {
     // Visual feedback for emergency stop
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text("紧急制动！", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text("Emergency Stop!", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.red,
         duration: Duration(seconds: 1),
       ),
@@ -108,8 +123,6 @@ class _ControlPageState extends State<ControlPage> {
     try {
       final String captureUrl;
       if (state.isRemoteMode) {
-        // Use relay server for snapshot (we need to add a proxy for capture too or use stream)
-        // For simplicity, let's assume the relay server handles /capture too.
         String host = state.relayServer;
         if (!host.startsWith('http://') && !host.startsWith('https://')) {
           host = 'http://$host';
@@ -144,7 +157,6 @@ class _ControlPageState extends State<ControlPage> {
     final String videoUrl;
     
     if (state.isRemoteMode) {
-      // Use relay server for video stream
       String host = state.relayServer;
       if (!host.startsWith('http://') && !host.startsWith('https://')) {
         host = 'http://$host';
@@ -159,35 +171,25 @@ class _ControlPageState extends State<ControlPage> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Background: Video Stream
-          GestureDetector(
-            onPanUpdate: state.mode == "MANUAL"
-                ? (details) {
-                    state.updateMixedServos(details.delta.dx * 0.1, details.delta.dy * 0.1);
-                  }
-                : null,
-            onPanEnd: state.mode == "MANUAL"
-                ? (_) => state.sendCommand({"cmd": "servo_stop", "channel": 1})
-                : null,
-            child: InteractiveViewer(
-              minScale: 1.0,
-              maxScale: 5.0,
-              child: SizedBox.expand(
-                child: Mjpeg(
-                  key: ValueKey(
-                    "control-${state.isRemoteMode}-${state.cameraIp}-${state.deviceId}-${state.relayServer}-${state.isConnected}",
-                  ),
-                  isLive: true,
-                  stream: videoUrl,
-                  error: (context, error, stack) => const Center(
-                    child: Icon(Icons.signal_wifi_bad, color: Colors.red, size: 50),
-                  ),
+          // 1. Background: Video Stream
+          InteractiveViewer(
+            minScale: 1.0,
+            maxScale: 5.0,
+            child: SizedBox.expand(
+              child: Mjpeg(
+                key: ValueKey(
+                  "control-${state.isRemoteMode}-${state.cameraIp}-${state.deviceId}-${state.relayServer}-${state.isConnected}",
+                ),
+                isLive: true,
+                stream: videoUrl,
+                error: (context, error, stack) => const Center(
+                  child: Icon(Icons.signal_wifi_bad, color: Colors.red, size: 50),
                 ),
               ),
             ),
           ),
 
-          // HUD Overlay
+          // 2. HUD Overlay
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -196,24 +198,26 @@ class _ControlPageState extends State<ControlPage> {
                   // Top Status Bar
                   Positioned(
                     top: 0, left: 0, right: 0,
-                    child: _buildTopBar(state, primaryColor),
+                    child: Center(child: _buildTopBar(state, primaryColor)),
                   ),
-          Positioned(
-            top: 40, left: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                "vx:${_lastVx.toStringAsFixed(2)} vy:${_lastVy.toStringAsFixed(2)} vw:${_lastVw.toStringAsFixed(2)}",
-                style: GoogleFonts.shareTechMono(color: Colors.white70, fontSize: 12),
-              ),
-            ),
-          ),
+                  
+                  // Debug Info (Optional)
+                  Positioned(
+                    top: 50, left: 16,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        "vx:${_lastVx.toStringAsFixed(2)} vy:${_lastVy.toStringAsFixed(2)} vw:${_lastVw.toStringAsFixed(2)}",
+                        style: GoogleFonts.shareTechMono(color: Colors.white70, fontSize: 12),
+                      ),
+                    ),
+                  ),
 
-                  // Exit Button
+                  // Exit Button (Top Left)
                   Positioned(
                     top: 0, left: 0,
                     child: IconButton(
@@ -222,37 +226,110 @@ class _ControlPageState extends State<ControlPage> {
                     ),
                   ),
 
-                  // Emergency Stop Button (PRD: High Priority)
+                  // Emergency Stop Button (Top Right)
                   Positioned(
                     top: 0, right: 0,
+                    child: ElevatedButton(
+                      onPressed: () => _emergencyStop(state),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.withValues(alpha: 0.8),
+                        foregroundColor: Colors.white,
+                        shape: const CircleBorder(),
+                        padding: const EdgeInsets.all(12),
+                      ),
+                      child: const Icon(Icons.stop_rounded, size: 28),
+                    ),
+                  ),
+                  
+                  // Left Control: Up/Down (Forward/Back)
+                  Align(
+                    alignment: Alignment.centerLeft,
                     child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: ElevatedButton(
-                        onPressed: () => _emergencyStop(state),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          foregroundColor: Colors.white,
-                          shape: const CircleBorder(),
-                          padding: const EdgeInsets.all(16),
-                        ),
-                        child: const Text("STOP", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      padding: const EdgeInsets.only(left: 32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildArrowButton(
+                            icon: Icons.keyboard_arrow_up_rounded, // Hollow-ish feel
+                            onPress: () => _setUp(state, true),
+                            onRelease: () => _setUp(state, false),
+                            primaryColor: primaryColor,
+                          ),
+                          const SizedBox(height: 40), // Spacing
+                          _buildArrowButton(
+                            icon: Icons.keyboard_arrow_down_rounded,
+                            onPress: () => _setDown(state, true),
+                            onRelease: () => _setDown(state, false),
+                            primaryColor: primaryColor,
+                          ),
+                        ],
                       ),
                     ),
                   ),
                   
+                  // Right Control: Left/Right (Strafe)
                   Align(
-                    alignment: Alignment.bottomCenter,
+                    alignment: Alignment.centerRight,
                     child: Padding(
-                      padding: const EdgeInsets.only(bottom: 80),
-                      child: _buildDirectionPad(state, primaryColor),
+                      padding: const EdgeInsets.only(right: 32),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildArrowButton(
+                            icon: Icons.keyboard_arrow_left_rounded,
+                            onPress: () => _setLeft(state, true),
+                            onRelease: () => _setLeft(state, false),
+                            primaryColor: primaryColor,
+                          ),
+                          const SizedBox(width: 40), // Spacing
+                          _buildArrowButton(
+                            icon: Icons.keyboard_arrow_right_rounded,
+                            onPress: () => _setRight(state, true),
+                            onRelease: () => _setRight(state, false),
+                            primaryColor: primaryColor,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
 
-                  // Bottom Action Bar
+                  // Bottom Toolbar
                   Align(
                     alignment: Alignment.bottomCenter,
                     child: _buildFloatingActionBar(state, primaryColor),
                   ),
+                  
+                  // PTZ Joystick Overlay
+                  if (_showPtzJoystick)
+                    Center(
+                      child: Container(
+                        width: 200,
+                        height: 200,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.3),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white24),
+                        ),
+                        child: Joystick(
+                          mode: JoystickMode.all,
+                          listener: (details) {
+                            // Invert Y for natural camera control (Up = Look Up)
+                            state.updatePtz(details.x, -details.y);
+                          },
+                          base: JoystickBase(
+                            decoration: JoystickBaseDecoration(
+                              color: Colors.transparent,
+                            ),
+                          ),
+                          stick: JoystickStick(
+                            decoration: JoystickStickDecoration(
+                              color: primaryColor.withValues(alpha: 0.8),
+                              shadowColor: primaryColor.withValues(alpha: 0.5),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -263,8 +340,11 @@ class _ControlPageState extends State<ControlPage> {
   }
 
   Widget _buildTopBar(CarState state, Color primaryColor) {
+    // Battery calculation handled in CarState
+    final batteryPct = state.batteryPercentage;
+    
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(20),
@@ -274,11 +354,13 @@ class _ControlPageState extends State<ControlPage> {
         children: [
           _buildHudItem(Icons.wifi, "${state.wifiSignal}dBm", state.isConnected ? primaryColor : Colors.red),
           _buildVerticalDivider(),
-          _buildHudItem(Icons.battery_charging_full, "${state.carBattery}V", state.carBattery > 11.0 ? Colors.green : Colors.orange),
+          _buildHudItem(
+            Icons.battery_charging_full, 
+            "${state.carBattery.toStringAsFixed(1)}V (${(batteryPct * 100).toInt()}%)", 
+            state.carBattery > 7.4 ? Colors.green : Colors.orange
+          ),
           _buildVerticalDivider(),
           _buildHudItem(Icons.speed, "${(state.maxSpeed * 100).toInt()}%", Colors.white),
-          _buildVerticalDivider(),
-          _buildHudItem(Icons.settings_input_antenna, "${state.distance}cm", Colors.yellow),
           _buildVerticalDivider(),
           _buildHudItem(Icons.drive_eta, state.mode, state.mode == "MANUAL" ? primaryColor : Colors.purpleAccent),
         ],
@@ -289,11 +371,11 @@ class _ControlPageState extends State<ControlPage> {
   Widget _buildHudItem(IconData icon, String value, Color color) {
     return Row(
       children: [
-        Icon(icon, color: color, size: 16),
-        const SizedBox(width: 6),
+        Icon(icon, color: color, size: 14),
+        const SizedBox(width: 4),
         Text(
           value,
-          style: GoogleFonts.shareTechMono(color: Colors.white, fontSize: 14),
+          style: GoogleFonts.shareTechMono(color: Colors.white, fontSize: 13),
         ),
       ],
     );
@@ -301,132 +383,35 @@ class _ControlPageState extends State<ControlPage> {
 
   Widget _buildVerticalDivider() {
     return Container(
-      height: 15,
+      height: 12,
       width: 1,
       color: Colors.white24,
-      margin: const EdgeInsets.symmetric(horizontal: 12),
+      margin: const EdgeInsets.symmetric(horizontal: 10),
     );
   }
 
-  Widget _buildDirectionPad(CarState state, Color primaryColor) {
-    final bool enabled = state.isConnected && state.mode == "MANUAL";
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        // 左侧：上排=原地左/右转, 下排=平移左/右
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                _buildHoldButton(
-                  icon: Icons.rotate_left,
-                  onPress: enabled ? () => _setLeft(state, true) : null,
-                  onRelease: enabled ? () => _setLeft(state, false) : null,
-                  primaryColor: primaryColor,
-                ),
-                const SizedBox(width: 12),
-                _buildHoldButton(
-                  icon: Icons.rotate_right,
-                  onPress: enabled ? () => _setRight(state, true) : null,
-                  onRelease: enabled ? () => _setRight(state, false) : null,
-                  primaryColor: primaryColor,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                _buildHoldButton(
-                  icon: Icons.chevron_left,
-                  onPress: enabled ? () => _setStrafeLeft(state, true) : null,
-                  onRelease: enabled ? () => _setStrafeLeft(state, false) : null,
-                  primaryColor: primaryColor,
-                ),
-                const SizedBox(width: 12),
-                _buildHoldButton(
-                  icon: Icons.chevron_right,
-                  onPress: enabled ? () => _setStrafeRight(state, true) : null,
-                  onRelease: enabled ? () => _setStrafeRight(state, false) : null,
-                  primaryColor: primaryColor,
-                ),
-              ],
-            ),
-          ],
-        ),
-        // 中间：左右调头（水平排列）
-        Row(
-          children: [
-            _buildHoldButton(
-              icon: Icons.subdirectory_arrow_left,
-              onPress: enabled ? () => _uTurn(state, true) : null,
-              onRelease: enabled ? () => _stopMove(state) : null,
-              primaryColor: primaryColor,
-            ),
-            const SizedBox(width: 12),
-            _buildHoldButton(
-              icon: Icons.subdirectory_arrow_right,
-              onPress: enabled ? () => _uTurn(state, false) : null,
-              onRelease: enabled ? () => _stopMove(state) : null,
-              primaryColor: primaryColor,
-            ),
-          ],
-        ),
-        // 右侧：前进/后退（垂直列）
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHoldButton(
-              icon: Icons.arrow_upward,
-              onPress: enabled ? () => _setFwd(state, true) : null,
-              onRelease: enabled ? () => _setFwd(state, false) : null,
-              primaryColor: primaryColor,
-            ),
-            const SizedBox(height: 12),
-            _buildHoldButton(
-              icon: Icons.arrow_downward,
-              onPress: enabled ? () => _setBack(state, true) : null,
-              onRelease: enabled ? () => _setBack(state, false) : null,
-              primaryColor: primaryColor,
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildHoldButton({
+  Widget _buildArrowButton({
     required IconData icon,
-    required VoidCallback? onPress,
-    required VoidCallback? onRelease,
+    required VoidCallback onPress,
+    required VoidCallback onRelease,
     required Color primaryColor,
   }) {
-    final bool isEnabled = onPress != null && onRelease != null;
-    return Listener(
-      onPointerDown: (_) {
-        if (isEnabled) onPress();
-      },
-      onPointerUp: (_) {
-        if (isEnabled) onRelease();
-      },
-      onPointerCancel: (_) {
-        if (isEnabled) onRelease();
-      },
+    return GestureDetector(
+      onPanDown: (_) => onPress(),
+      onPanEnd: (_) => onRelease(),
+      onPanCancel: () => onRelease(),
       child: Container(
-        width: 64,
-        height: 64,
+        width: 72,
+        height: 72,
         decoration: BoxDecoration(
-          color: isEnabled ? Colors.white.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isEnabled ? primaryColor : Colors.white.withValues(alpha: 0.1),
-            width: 1.5,
-          ),
+          color: Colors.white.withValues(alpha: 0.1),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 2),
         ),
         child: Icon(
           icon,
-          color: isEnabled ? primaryColor : Colors.white.withValues(alpha: 0.3),
-          size: 32,
+          color: Colors.white.withValues(alpha: 0.9), // White icon
+          size: 40,
         ),
       ),
     );
@@ -435,10 +420,11 @@ class _ControlPageState extends State<ControlPage> {
   Widget _buildFloatingActionBar(CarState state, Color primaryColor) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.6), 
         borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -451,20 +437,32 @@ class _ControlPageState extends State<ControlPage> {
               state.setCarMode(nextMode);
             }
           ),
-          const SizedBox(width: 20),
-          _buildActionButton(Icons.lightbulb, state.isLightOn ? primaryColor : Colors.white, () => state.toggleLight()),
-          const SizedBox(width: 20),
-          _buildActionButton(Icons.camera_alt, Colors.white, () => _takeSnapshot()),
-          const SizedBox(width: 20),
-          _buildActionButton(Icons.campaign, state.isHornOn ? Colors.red : Colors.white, () => state.toggleHorn(!state.isHornOn)),
-          const SizedBox(width: 20),
-          _buildActionButton(
-            state.isCamFlashOn ? Icons.flash_on : Icons.flash_off, 
-            state.isCamFlashOn ? Colors.amber : Colors.white, 
-            () => state.toggleCamFlash()
+          const SizedBox(width: 24),
+          _buildActionButton(Icons.lightbulb_outline, state.isLightOn ? primaryColor : Colors.white, () => state.toggleLight()),
+          const SizedBox(width: 24),
+          // PTZ Toggle Button
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: _showPtzJoystick ? primaryColor.withValues(alpha: 0.2) : Colors.transparent,
+              shape: BoxShape.circle,
+            ),
+            child: _buildActionButton(
+              Icons.gamepad_rounded, 
+              _showPtzJoystick ? primaryColor : Colors.white, 
+              () {
+                setState(() {
+                  _showPtzJoystick = !_showPtzJoystick;
+                });
+              }
+            ),
           ),
-          const SizedBox(width: 20),
-           _buildActionButton(Icons.settings, Colors.white, () {
+          const SizedBox(width: 24),
+          _buildActionButton(Icons.camera_alt_outlined, Colors.white, () => _takeSnapshot()),
+          const SizedBox(width: 24),
+          _buildActionButton(Icons.campaign_outlined, state.isHornOn ? Colors.red : Colors.white, () => state.toggleHorn(!state.isHornOn)),
+          const SizedBox(width: 24),
+           _buildActionButton(Icons.settings_outlined, Colors.white, () {
               Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const DeviceConfigPage()),
               );
@@ -477,7 +475,7 @@ class _ControlPageState extends State<ControlPage> {
   Widget _buildActionButton(IconData icon, Color color, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
-      child: Icon(icon, color: color, size: 28),
+      child: Icon(icon, color: color, size: 26),
     );
   }
 }

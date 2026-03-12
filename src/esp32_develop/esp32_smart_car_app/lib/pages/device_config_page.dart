@@ -18,6 +18,8 @@ class _DeviceConfigPageState extends State<DeviceConfigPage> {
   String _nightMode = "Auto";
   String _aiDetection = "All";
   double _detectionSensitivity = 0.75;
+  double _voltageCalibration = 1.0;
+  bool _useVoltageDivider = false;
 
   @override
   void initState() {
@@ -30,6 +32,8 @@ class _DeviceConfigPageState extends State<DeviceConfigPage> {
     _nightMode = state.nightMode;
     _aiDetection = state.aiDetection;
     _detectionSensitivity = state.detectionSensitivity;
+    _voltageCalibration = state.voltageCalibration;
+    _useVoltageDivider = state.useVoltageDivider;
   }
 
   void _saveSettings() {
@@ -43,6 +47,8 @@ class _DeviceConfigPageState extends State<DeviceConfigPage> {
       newNightMode: _nightMode,
       newAiDetection: _aiDetection,
       newDetectionSensitivity: _detectionSensitivity,
+      newVoltageCalibration: _voltageCalibration,
+      newUseVoltageDivider: _useVoltageDivider,
     );
 
     ScaffoldMessenger.of(context)
@@ -110,6 +116,22 @@ class _DeviceConfigPageState extends State<DeviceConfigPage> {
                   _buildChoiceRow(l10n.aiDetection, {"Person": l10n.person, "Pet": l10n.pet, "All": l10n.all}, _aiDetection, (v) => setState(() => _aiDetection = v)),
                   _buildSliderRow(l10n.detectionSensitivity, _detectionSensitivity, (v) => setState(() => _detectionSensitivity = v)),
                 ]),
+                const SizedBox(height: 24),
+                _buildSection("Voltage Calibration", [
+                  SwitchListTile(
+                    title: const Text("Use R1/R2 Divider (x3.2)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    subtitle: const Text("Enable if device sends raw ADC voltage (e.g. 2.6V)", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    value: _useVoltageDivider,
+                    activeTrackColor: Theme.of(context).colorScheme.primary,
+                    onChanged: (v) => setState(() => _useVoltageDivider = v),
+                  ),
+                  const Divider(height: 1),
+                  _buildSliderRow(
+                    "Calibration", 
+                    (_voltageCalibration - 0.5) / 1.0, // Normalize 0.5-1.5 to 0.0-1.0
+                    (v) => setState(() => _voltageCalibration = 0.5 + (v * 1.0))
+                  ),
+                ]),
                 const SizedBox(height: 30),
               ]),
             ),
@@ -175,7 +197,7 @@ class _DeviceConfigPageState extends State<DeviceConfigPage> {
             overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
           ),
           child: Slider(
-            value: value,
+            value: value.clamp(0.0, 1.0),
             onChanged: onChanged,
           ),
         ),
@@ -187,7 +209,9 @@ class _DeviceConfigPageState extends State<DeviceConfigPage> {
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
-          "${(value * 100).toInt()}%", 
+          label.contains("Calibration") 
+            ? "x${(0.5 + value).toStringAsFixed(2)}" 
+            : "${(value * 100).toInt()}%", 
           style: TextStyle(color: primaryColor, fontSize: 13, fontWeight: FontWeight.bold)
         ),
       ),
