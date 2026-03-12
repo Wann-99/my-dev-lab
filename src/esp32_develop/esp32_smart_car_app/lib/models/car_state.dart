@@ -5,9 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:multicast_dns/multicast_dns.dart';
-import 'package:shelf/shelf.dart';
-import 'package:shelf/shelf_io.dart' as shelf_io;
-import 'package:network_info_plus/network_info_plus.dart';
 import 'package:http/http.dart' as http;
 
 class CarState extends ChangeNotifier {
@@ -87,6 +84,8 @@ class CarState extends ChangeNotifier {
   bool isLocalServerRunning = false;
   String? localServerUrl;
   
+  bool showEmergencyStop = true;
+  
   CarState() {
     _loadSettings();
     _startAutoConnectTimer();
@@ -133,7 +132,6 @@ class CarState extends ChangeNotifier {
       notifyListeners();
 
       final uri = Uri.parse("http://$carIp/update${isCam ? "?target=cam" : ""}");
-      var request = http.MultipartRequest('POST', uri);
       
       // ESP32-S3 expects raw body or multipart? 
       // My ota_server.c implementation uses httpd_req_recv, which handles raw body better.
@@ -207,6 +205,7 @@ class CarState extends ChangeNotifier {
     nightMode = prefs.getString('night_mode') ?? "Auto";
     aiDetection = prefs.getString('ai_detection') ?? "All";
     detectionSensitivity = prefs.getDouble('detection_sensitivity') ?? 0.75;
+    showEmergencyStop = prefs.getBool('show_emergency_stop') ?? true;
     
     if (cameraIp.isEmpty && carIp.isNotEmpty) {
       cameraIp = carIp;
@@ -234,6 +233,7 @@ class CarState extends ChangeNotifier {
     nightMode = "Auto";
     aiDetection = "Person";
     detectionSensitivity = 0.6; // 60%
+    showEmergencyStop = true;
     
     _isManuallyDisconnected = false;
     
@@ -257,6 +257,7 @@ class CarState extends ChangeNotifier {
       "vy": 0,
       "vw": 0
     });
+    // In case of emergency stop, we might want to toggle some local UI state
     notifyListeners();
   }
 
@@ -303,6 +304,8 @@ class CarState extends ChangeNotifier {
     double? newDetectionSensitivity,
     String? newRelayServer,
     bool? newIsRemoteMode,
+    bool? newShowFloatingBall,
+    bool? newShowEmergencyStop,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     
@@ -314,6 +317,11 @@ class CarState extends ChangeNotifier {
       await prefs.setBool('is_remote_mode', newIsRemoteMode);
       isRemoteMode = newIsRemoteMode;
       disconnect(); // Reconnect when mode changes
+    }
+    
+    if (newShowEmergencyStop != null) {
+      await prefs.setBool('show_emergency_stop', newShowEmergencyStop);
+      showEmergencyStop = newShowEmergencyStop;
     }
     
     if (newCarIp != null && newCarIp != carIp) {
@@ -478,7 +486,7 @@ class CarState extends ChangeNotifier {
         
         String? foundId;
         String? foundIp;
-        String? foundInstanceName = ptr.domainName.split('.')[0];
+        String foundInstanceName = ptr.domainName.split('.')[0];
 
         // Resolve TXT, SRV and IP in parallel for this PTR
         await Future.wait([
@@ -525,14 +533,14 @@ class CarState extends ChangeNotifier {
         ]);
 
         if (foundIp != null) {
-          final String finalId = foundId ?? foundInstanceName ?? "Unknown";
+          final String finalId = foundId ?? foundInstanceName;
           bool exists = discoveredDevices.any((d) => d['ip'] == foundIp);
           if (!exists) {
             debugPrint("Discovered Device: $finalId at $foundIp");
             discoveredDevices.add({
               'ip': foundIp!,
               'id': finalId,
-              'name': foundInstanceName ?? "RoboCar",
+              'name': foundInstanceName,
             });
             notifyListeners();
           }
@@ -577,8 +585,12 @@ class CarState extends ChangeNotifier {
         uri = Uri.parse('ws://$carIp:80');
       }
       
+      debugPrint("Connecting to WebSocket: $uri");
       _channel = WebSocketChannel.connect(uri);
-      await _channel!.ready; 
+      
+      // Wait for connection with timeout
+      await _channel!.ready.timeout(const Duration(seconds: 5)); 
+      
       isConnected = true;
       _isManuallyDisconnected = false;
 
@@ -594,61 +606,71 @@ class CarState extends ChangeNotifier {
       
       notifyListeners();
 
-      _channel!.stream.listen((message) {
-        try {
-          final data = jsonDecode(message);
-          if (data['type'] == 'status') {
-            _lastHeartbeatTime = DateTime.now(); // Update heartbeat on any status message
-            
-            // PRD: 多传感器距离
-            if (data['dist_f'] != null) distFront = (data['dist_f'] as num).toDouble();
-            if (data['dist_l'] != null) distLeft = (data['dist_l'] as num).toDouble();
-            if (data['dist_r'] != null) distRight = (data['dist_r'] as num).toDouble();
-            
-            if (data['dist'] != null) {
-              distance = data['dist'].toString();
-            } else if (data['dist_f'] != null) {
-              distance = data['dist_f'].toString();
-            }
-            
-            if (data['mode'] != null) mode = data['mode'].toString().toUpperCase();
-            if (data.containsKey('cam_ip') || data.containsKey('camIP')) {
-              String? newIp = data['cam_ip'] ?? data['camIP'];
-              if (newIp != null && newIp != "0.0.0.0" && newIp != cameraIp) {
-                cameraIp = newIp;
-                SharedPreferences.getInstance().then((prefs) {
-                  prefs.setString('camera_ip', newIp);
-                });
+      _channel!.stream.listen(
+        (message) {
+          try {
+            final data = jsonDecode(message);
+            if (data['type'] == 'status') {
+              _lastHeartbeatTime = DateTime.now(); // Update heartbeat on any status message
+              
+              // PRD: 多传感器距离
+              if (data['dist_f'] != null) distFront = (data['dist_f'] as num).toDouble();
+              if (data['dist_l'] != null) distLeft = (data['dist_l'] as num).toDouble();
+              if (data['dist_r'] != null) distRight = (data['dist_r'] as num).toDouble();
+              
+              if (data['dist'] != null) {
+                distance = data['dist'].toString();
+              } else if (data['dist_f'] != null) {
+                distance = data['dist_f'].toString();
               }
+              
+              if (data['mode'] != null) mode = data['mode'].toString().toUpperCase();
+              if (data.containsKey('cam_ip') || data.containsKey('camIP')) {
+                String? newIp = data['cam_ip'] ?? data['camIP'];
+                if (newIp != null && newIp != "0.0.0.0" && newIp != cameraIp) {
+                  cameraIp = newIp;
+                  SharedPreferences.getInstance().then((prefs) {
+                    prefs.setString('camera_ip', newIp);
+                  });
+                }
+              }
+              if (data['v_car'] != null) carBattery = (data['v_car'] as num).toDouble();
+              if (data['rssi'] != null) wifiSignal = (data['rssi'] as num).toInt();
+              
+              // If device sends back a timestamp for ping
+              if (data['pong'] != null && _lastPingTime != null) {
+                latency = DateTime.now().difference(_lastPingTime!).inMilliseconds;
+              }
+              
+              notifyListeners();
             }
-            if (data['v_car'] != null) carBattery = (data['v_car'] as num).toDouble();
-            if (data['rssi'] != null) wifiSignal = (data['rssi'] as num).toInt();
-            
-            // If device sends back a timestamp for ping
-            if (data['pong'] != null && _lastPingTime != null) {
-              latency = DateTime.now().difference(_lastPingTime!).inMilliseconds;
-            }
-            
-            notifyListeners();
+          } catch (e) {
+            debugPrint("Parse Error: $e");
           }
-        } catch (e) {
-          debugPrint("Parse Error: $e");
-        }
-      }, onDone: () {
-        _stopPing();
-        isConnected = false;
-        notifyListeners();
-      }, onError: (err) {
-        _stopPing();
-        isConnected = false;
-        notifyListeners();
-      });
+        }, 
+        onDone: () {
+          debugPrint("WebSocket Connection Closed (onDone)");
+          _handleDisconnect();
+        }, 
+        onError: (err) {
+          debugPrint("WebSocket Error: $err");
+          _handleDisconnect();
+        },
+        cancelOnError: true,
+      );
       return true;
     } catch (e) {
-      isConnected = false;
-      notifyListeners();
+      debugPrint("Connection failed: $e");
+      _handleDisconnect();
       return false;
     }
+  }
+
+  void _handleDisconnect() {
+    _stopPing();
+    _channel = null;
+    isConnected = false;
+    notifyListeners();
   }
 
   void _startPing() {

@@ -19,10 +19,9 @@ class ControlPage extends StatefulWidget {
 }
 
 class _ControlPageState extends State<ControlPage> {
-  double _currentThrottle = 0.0;
-  double _linearSpeedFactor = 1.0;
-  double _angularSpeedFactor = 1.0;
-  double _strafeSpeedFactor = 1.0;
+  final double _linearSpeedFactor = 1.0;
+  final double _angularSpeedFactor = 1.0;
+  final double _strafeSpeedFactor = 1.0;
   double _lastVx = 0, _lastVy = 0, _lastVw = 0;
   bool _pressFwd = false;
   bool _pressBack = false;
@@ -31,17 +30,6 @@ class _ControlPageState extends State<ControlPage> {
   bool _pressStrafeLeft = false;
   bool _pressStrafeRight = false;
   Timer? _uTurnTimer;
-
-  void _onJoystickStop(CarState state) {
-    if (!state.isConnected) return;
-    _currentThrottle = 0;
-    state.sendCommand({
-      "cmd": "move",
-      "vx": 0,
-      "vy": 0,
-      "vw": 0
-    });
-  }
 
   void _applyMotion(CarState state) {
     if (!state.isConnected) return;
@@ -152,6 +140,7 @@ class _ControlPageState extends State<ControlPage> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<CarState>();
+    final primaryColor = Theme.of(context).colorScheme.primary;
     final String videoUrl;
     
     if (state.isRemoteMode) {
@@ -207,7 +196,7 @@ class _ControlPageState extends State<ControlPage> {
                   // Top Status Bar
                   Positioned(
                     top: 0, left: 0, right: 0,
-                    child: _buildTopBar(state),
+                    child: _buildTopBar(state, primaryColor),
                   ),
           Positioned(
             top: 40, left: 16,
@@ -228,7 +217,7 @@ class _ControlPageState extends State<ControlPage> {
                   Positioned(
                     top: 0, left: 0,
                     child: IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white70, size: 28),
+                      icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 28),
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                   ),
@@ -255,14 +244,14 @@ class _ControlPageState extends State<ControlPage> {
                     alignment: Alignment.bottomCenter,
                     child: Padding(
                       padding: const EdgeInsets.only(bottom: 80),
-                      child: _buildDirectionPad(state),
+                      child: _buildDirectionPad(state, primaryColor),
                     ),
                   ),
 
                   // Bottom Action Bar
                   Align(
                     alignment: Alignment.bottomCenter,
-                    child: _buildFloatingActionBar(state),
+                    child: _buildFloatingActionBar(state, primaryColor),
                   ),
                 ],
               ),
@@ -273,18 +262,17 @@ class _ControlPageState extends State<ControlPage> {
     );
   }
 
-  Widget _buildTopBar(CarState state) {
+  Widget _buildTopBar(CarState state, Color primaryColor) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.5),
+        color: Colors.black.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF00F0FF).withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildHudItem(Icons.wifi, "${state.wifiSignal}dBm", state.isConnected ? const Color(0xFF00F0FF) : Colors.red),
+          _buildHudItem(Icons.wifi, "${state.wifiSignal}dBm", state.isConnected ? primaryColor : Colors.red),
           _buildVerticalDivider(),
           _buildHudItem(Icons.battery_charging_full, "${state.carBattery}V", state.carBattery > 11.0 ? Colors.green : Colors.orange),
           _buildVerticalDivider(),
@@ -292,7 +280,7 @@ class _ControlPageState extends State<ControlPage> {
           _buildVerticalDivider(),
           _buildHudItem(Icons.settings_input_antenna, "${state.distance}cm", Colors.yellow),
           _buildVerticalDivider(),
-          _buildHudItem(Icons.drive_eta, state.mode, state.mode == "MANUAL" ? const Color(0xFF00F0FF) : Colors.purpleAccent),
+          _buildHudItem(Icons.drive_eta, state.mode, state.mode == "MANUAL" ? primaryColor : Colors.purpleAccent),
         ],
       ),
     );
@@ -320,7 +308,7 @@ class _ControlPageState extends State<ControlPage> {
     );
   }
 
-  Widget _buildDirectionPad(CarState state) {
+  Widget _buildDirectionPad(CarState state, Color primaryColor) {
     final bool enabled = state.isConnected && state.mode == "MANUAL";
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -335,12 +323,14 @@ class _ControlPageState extends State<ControlPage> {
                   icon: Icons.rotate_left,
                   onPress: enabled ? () => _setLeft(state, true) : null,
                   onRelease: enabled ? () => _setLeft(state, false) : null,
+                  primaryColor: primaryColor,
                 ),
                 const SizedBox(width: 12),
                 _buildHoldButton(
                   icon: Icons.rotate_right,
                   onPress: enabled ? () => _setRight(state, true) : null,
                   onRelease: enabled ? () => _setRight(state, false) : null,
+                  primaryColor: primaryColor,
                 ),
               ],
             ),
@@ -351,12 +341,14 @@ class _ControlPageState extends State<ControlPage> {
                   icon: Icons.chevron_left,
                   onPress: enabled ? () => _setStrafeLeft(state, true) : null,
                   onRelease: enabled ? () => _setStrafeLeft(state, false) : null,
+                  primaryColor: primaryColor,
                 ),
                 const SizedBox(width: 12),
                 _buildHoldButton(
                   icon: Icons.chevron_right,
                   onPress: enabled ? () => _setStrafeRight(state, true) : null,
                   onRelease: enabled ? () => _setStrafeRight(state, false) : null,
+                  primaryColor: primaryColor,
                 ),
               ],
             ),
@@ -369,12 +361,14 @@ class _ControlPageState extends State<ControlPage> {
               icon: Icons.subdirectory_arrow_left,
               onPress: enabled ? () => _uTurn(state, true) : null,
               onRelease: enabled ? () => _stopMove(state) : null,
+              primaryColor: primaryColor,
             ),
             const SizedBox(width: 12),
             _buildHoldButton(
               icon: Icons.subdirectory_arrow_right,
               onPress: enabled ? () => _uTurn(state, false) : null,
               onRelease: enabled ? () => _stopMove(state) : null,
+              primaryColor: primaryColor,
             ),
           ],
         ),
@@ -386,12 +380,14 @@ class _ControlPageState extends State<ControlPage> {
               icon: Icons.arrow_upward,
               onPress: enabled ? () => _setFwd(state, true) : null,
               onRelease: enabled ? () => _setFwd(state, false) : null,
+              primaryColor: primaryColor,
             ),
             const SizedBox(height: 12),
             _buildHoldButton(
               icon: Icons.arrow_downward,
               onPress: enabled ? () => _setBack(state, true) : null,
               onRelease: enabled ? () => _setBack(state, false) : null,
+              primaryColor: primaryColor,
             ),
           ],
         ),
@@ -403,6 +399,7 @@ class _ControlPageState extends State<ControlPage> {
     required IconData icon,
     required VoidCallback? onPress,
     required VoidCallback? onRelease,
+    required Color primaryColor,
   }) {
     final bool isEnabled = onPress != null && onRelease != null;
     return Listener(
@@ -419,29 +416,29 @@ class _ControlPageState extends State<ControlPage> {
         width: 64,
         height: 64,
         decoration: BoxDecoration(
-          color: isEnabled ? Colors.black45 : Colors.black26,
+          color: isEnabled ? Colors.white.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: const Color(0xFF00F0FF).withValues(alpha: isEnabled ? 0.8 : 0.2),
+            color: isEnabled ? primaryColor : Colors.white.withValues(alpha: 0.1),
+            width: 1.5,
           ),
         ),
         child: Icon(
           icon,
-          color: isEnabled ? const Color(0xFF00F0FF) : Colors.grey,
+          color: isEnabled ? primaryColor : Colors.white.withValues(alpha: 0.3),
           size: 32,
         ),
       ),
     );
   }
 
-  Widget _buildFloatingActionBar(CarState state) {
+  Widget _buildFloatingActionBar(CarState state, Color primaryColor) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.black54, 
+        color: Colors.black.withValues(alpha: 0.6), 
         borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: Colors.white10),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -455,7 +452,7 @@ class _ControlPageState extends State<ControlPage> {
             }
           ),
           const SizedBox(width: 20),
-          _buildActionButton(Icons.lightbulb, state.isLightOn ? const Color(0xFF00F0FF) : Colors.white, () => state.toggleLight()),
+          _buildActionButton(Icons.lightbulb, state.isLightOn ? primaryColor : Colors.white, () => state.toggleLight()),
           const SizedBox(width: 20),
           _buildActionButton(Icons.camera_alt, Colors.white, () => _takeSnapshot()),
           const SizedBox(width: 20),

@@ -469,4 +469,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get bindSuccess => '设备绑定成功';
+
+  @override
+  String get device => '设备';
+
+  @override
+  String get moreSettings => '更多设置';
 }

@@ -148,5 +148,7 @@
   "searchingDevices": "正在搜索设备",
   "searching": "搜索中...",
   "noDevicesFound": "附近未发现可用设备",
-  "bindSuccess": "设备绑定成功"
+  "bindSuccess": "设备绑定成功",
+  "device": "设备",
+  "moreSettings": "更多设置"
 }

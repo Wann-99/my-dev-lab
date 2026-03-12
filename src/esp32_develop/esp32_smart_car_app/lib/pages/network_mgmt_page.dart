@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../models/car_state.dart';
-
 import 'network_config_page.dart';
 
 class NetworkMgmtPage extends StatefulWidget {
@@ -15,8 +14,8 @@ class NetworkMgmtPage extends StatefulWidget {
 class _NetworkMgmtPageState extends State<NetworkMgmtPage> {
   final _carIpController = TextEditingController();
   final _cameraIpController = TextEditingController();
-  final _relayServerController = TextEditingController();
   final _deviceIdController = TextEditingController();
+  final _relayServerController = TextEditingController();
   bool _isRemoteMode = false;
 
   @override
@@ -25,18 +24,9 @@ class _NetworkMgmtPageState extends State<NetworkMgmtPage> {
     final state = context.read<CarState>();
     _carIpController.text = state.carIp;
     _cameraIpController.text = state.cameraIp;
-    _relayServerController.text = state.relayServer;
     _deviceIdController.text = state.deviceId;
+    _relayServerController.text = state.relayServer;
     _isRemoteMode = state.isRemoteMode;
-  }
-
-  @override
-  void dispose() {
-    _carIpController.dispose();
-    _cameraIpController.dispose();
-    _relayServerController.dispose();
-    _deviceIdController.dispose();
-    super.dispose();
   }
 
   void _saveSettings() {
@@ -45,24 +35,20 @@ class _NetworkMgmtPageState extends State<NetworkMgmtPage> {
     state.saveAllSettings(
       newCarIp: _carIpController.text,
       newCameraIp: _cameraIpController.text,
-      newRelayServer: _relayServerController.text,
       newDeviceId: _deviceIdController.text,
+      newRelayServer: _relayServerController.text,
       newIsRemoteMode: _isRemoteMode,
     );
-
-    // If connected, sync relay config to car
-    if (state.isConnected) {
-      state.sendCommand({
-        "cmd": "set_relay",
-        "url": _relayServerController.text,
-        "id": _deviceIdController.text,
-      });
-    }
 
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
       ..showSnackBar(
-        SnackBar(content: Text(l10n.saved), backgroundColor: Colors.green),
+        SnackBar(
+          content: Text(l10n.saved), 
+          backgroundColor: Colors.greenAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       );
   }
 
@@ -70,129 +56,185 @@ class _NetworkMgmtPageState extends State<NetworkMgmtPage> {
   Widget build(BuildContext context) {
     final state = context.watch<CarState>();
     final l10n = AppLocalizations.of(context)!;
+    final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.networkConfig),
-        actions: [
-          TextButton(
-            onPressed: _saveSettings,
-            child: Text(l10n.save, style: const TextStyle(color: Color(0xFF00F0FF))),
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _buildSection(l10n.ipInfo, [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: _carIpController,
-                    decoration: InputDecoration(
-                      labelText: l10n.carIpAddress,
-                      hintText: "e.g. 192.168.4.1",
-                      prefixIcon: const Icon(Icons.router, color: Color(0xFF00F0FF)),
-                      suffixIcon: IconButton(
-                        icon: state.isDiscovering 
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00F0FF)))
-                          : const Icon(Icons.search, color: Color(0xFF00F0FF)),
-                        onPressed: state.isDiscovering ? null : () => state.startDiscovery(),
-                      ),
-                    ),
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  if (state.discoveredDevices.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text("${l10n.discoveredDevices}:", style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: state.discoveredDevices.map((device) => ActionChip(
-                        label: Text("${device['id']} (${device['ip']})"),
-                        backgroundColor: const Color(0xFF00F0FF).withValues(alpha: 0.1),
-                        labelStyle: const TextStyle(color: Color(0xFF00F0FF), fontSize: 12),
-                        side: const BorderSide(color: Color(0xFF00F0FF)),
-                        onPressed: () {
-                          setState(() {
-                            _carIpController.text = device['ip']!;
-                            _deviceIdController.text = device['id']!;
-                            state.saveAllSettings(newDeviceId: device['id']);
-                          });
-                        },
-                      )).toList(),
-                    ),
-                  ],
-                ],
-              ),
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          SliverAppBar.large(
+            title: Text(
+              l10n.networkConfig, 
+              style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5, color: Color(0xFF333333))
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: TextField(
-                controller: _cameraIpController,
-                decoration: InputDecoration(
-                  labelText: l10n.cameraIpAddress,
-                  hintText: "e.g. 192.168.4.2",
-                  prefixIcon: const Icon(Icons.camera_alt, color: Color(0xFF00F0FF)),
-                ),
-                style: const TextStyle(color: Colors.white),
-              ),
-            ),
-          ]),
-          const SizedBox(height: 20),
-          _buildSection(l10n.networkSettings, [
-            ListTile(
-              leading: const Icon(Icons.wifi_find, color: Color(0xFF00F0FF)),
-              title: Text(l10n.networkConfig),
-              subtitle: const Text("配置设备连接到指定 WiFi (SoftAP)"),
-              trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-              onTap: () {
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NetworkConfigPage()));
-              },
-            ),
-          ]),
-          const SizedBox(height: 20),
-          _buildSection(l10n.remoteControlSettings, [
-            SwitchListTile(
-              title: Text(l10n.remoteMode, style: const TextStyle(fontSize: 15, color: Colors.white)),
-              value: _isRemoteMode,
-              onChanged: (v) => setState(() => _isRemoteMode = v),
-              activeColor: const Color(0xFF00F0FF),
-            ),
-            const Divider(height: 1, indent: 16, endIndent: 16, color: Colors.white10),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: TextField(
-                controller: _deviceIdController,
-                decoration: InputDecoration(
-                  labelText: l10n.id,
-                  hintText: "e.g. car_01",
-                  prefixIcon: const Icon(Icons.fingerprint, color: Color(0xFF00F0FF)),
-                ),
-                style: const TextStyle(color: Colors.white),
-              ),
-            ),
-            if (_isRemoteMode) ...[
-              const Divider(height: 1, indent: 16, endIndent: 16, color: Colors.white10),
+            actions: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: TextField(
-                  controller: _relayServerController,
-                  decoration: InputDecoration(
-                    labelText: l10n.relayServerAddress,
-                    hintText: "e.g. 1.2.3.4:8081",
-                    prefixIcon: const Icon(Icons.cloud, color: Color(0xFF00F0FF)),
+                padding: const EdgeInsets.only(right: 16),
+                child: IconButton.filledTonal(
+                  onPressed: _saveSettings,
+                  icon: const Icon(Icons.save_rounded),
+                  style: IconButton.styleFrom(
+                    backgroundColor: primaryColor.withValues(alpha: 0.1),
+                    foregroundColor: primaryColor,
                   ),
-                  style: const TextStyle(color: Colors.white),
                 ),
               ),
             ],
-          ]),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            stretch: true,
+            pinned: true,
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                _buildSection(l10n.ipInfo, [
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      children: [
+                        _buildTextField(
+                          controller: _carIpController,
+                          label: l10n.carIpAddress,
+                          hint: "e.g. 192.168.4.1",
+                          icon: Icons.router_rounded,
+                          suffix: IconButton(
+                            icon: state.isDiscovering 
+                              ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: primaryColor))
+                              : Icon(Icons.search_rounded, color: primaryColor, size: 20),
+                            onPressed: state.isDiscovering ? null : () => state.startDiscovery(),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildTextField(
+                          controller: _cameraIpController,
+                          label: l10n.cameraIpAddress,
+                          hint: "e.g. 192.168.4.2",
+                          icon: Icons.camera_alt_rounded,
+                        ),
+                        if (state.discoveredDevices.isNotEmpty) ...[
+                          const SizedBox(height: 20),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              "${l10n.discoveredDevices}:", 
+                              style: const TextStyle(color: Color(0xFF999999), fontSize: 11, fontWeight: FontWeight.bold)
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: state.discoveredDevices.map((device) => ActionChip(
+                              label: ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 200),
+                                child: Text(
+                                  "${device['id']} (${device['ip']})", 
+                                  style: const TextStyle(fontSize: 11),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              backgroundColor: primaryColor.withValues(alpha: 0.1),
+                              labelStyle: TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
+                              side: BorderSide(color: primaryColor.withValues(alpha: 0.2)),
+                              padding: EdgeInsets.zero,
+                              onPressed: () {
+                                setState(() {
+                                  _carIpController.text = device['ip']!;
+                                  _deviceIdController.text = device['id']!;
+                                });
+                              },
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            )).toList(),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 24),
+                _buildSection(l10n.networkSettings, [
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    leading: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: primaryColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(Icons.wifi_find_rounded, color: primaryColor, size: 22),
+                    ),
+                    title: Text(l10n.networkConfig, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF333333))),
+                    trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFFCCCCCC), size: 22),
+                    onTap: () {
+                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NetworkConfigPage()));
+                    },
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  ),
+                ]),
+                const SizedBox(height: 24),
+                _buildSection(l10n.remoteControlSettings, [
+                  SwitchListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    title: Text(
+                      l10n.remoteMode, 
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF333333))
+                    ),
+                    value: _isRemoteMode,
+                    onChanged: (v) => setState(() => _isRemoteMode = v),
+                    activeThumbColor: Colors.white,
+                    activeTrackColor: primaryColor,
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                    child: Column(
+                      children: [
+                        _buildTextField(
+                          controller: _deviceIdController,
+                          label: l10n.id,
+                          hint: "e.g. car_01",
+                          icon: Icons.fingerprint_rounded,
+                        ),
+                        if (_isRemoteMode) ...[
+                          const SizedBox(height: 16),
+                          _buildTextField(
+                            controller: _relayServerController,
+                            label: l10n.relayServerAddress,
+                            hint: "e.g. 1.2.3.4:8081",
+                            icon: Icons.cloud_rounded,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 30),
+              ]),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    Widget? suffix,
+  }) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    
+    return TextField(
+      controller: controller,
+      style: const TextStyle(color: Color(0xFF333333), fontSize: 14),
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(icon, color: primaryColor, size: 20),
+        suffixIcon: suffix,
       ),
     );
   }
@@ -202,13 +244,28 @@ class _NetworkMgmtPageState extends State<NetworkMgmtPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 8, bottom: 8),
-          child: Text(title, style: const TextStyle(color: Colors.grey, fontSize: 14)),
+          padding: const EdgeInsets.only(left: 8, bottom: 12),
+          child: Text(
+            title, 
+            style: const TextStyle(
+              color: Color(0xFF999999), 
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+            )
+          ),
         ),
         Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E),
-            borderRadius: BorderRadius.circular(12),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFE0E0E0).withValues(alpha: 0.5),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Column(children: children),
         ),

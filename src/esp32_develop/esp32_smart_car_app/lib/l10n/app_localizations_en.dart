@@ -476,4 +476,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bindSuccess => 'Device bound successfully';
+
+  @override
+  String get device => 'Device';
+
+  @override
+  String get moreSettings => 'More Settings';
 }

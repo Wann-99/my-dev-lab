@@ -997,6 +997,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Device bound successfully'**
   String get bindSuccess;
+
+  /// No description provided for @device.
+  ///
+  /// In en, this message translates to:
+  /// **'Device'**
+  String get device;
+
+  /// No description provided for @moreSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'More Settings'**
+  String get moreSettings;
 }
 
 class _AppLocalizationsDelegate

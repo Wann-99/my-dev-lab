@@ -24,24 +24,58 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final primaryColor = const Color(0xFF29B6F6);
+    
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
         children: _pages,
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: const Color(0xFF12121A),
-        selectedItemColor: const Color(0xFF00F0FF),
-        unselectedItemColor: Colors.grey,
-        items: [
-          BottomNavigationBarItem(icon: const Icon(Icons.home), label: l10n.home),
-          BottomNavigationBarItem(icon: const Icon(Icons.devices), label: l10n.deviceSettings),
-          BottomNavigationBarItem(icon: const Icon(Icons.gamepad), label: l10n.control),
-          BottomNavigationBarItem(icon: const Icon(Icons.person), label: l10n.mine),
-        ],
+      bottomNavigationBar: NavigationBarTheme(
+        data: NavigationBarThemeData(
+          indicatorColor: primaryColor.withValues(alpha: 0.15),
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return TextStyle(color: primaryColor, fontSize: 12, fontWeight: FontWeight.bold);
+            }
+            return const TextStyle(color: Color(0xFF999999), fontSize: 12, fontWeight: FontWeight.w500);
+          }),
+          iconTheme: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return IconThemeData(color: primaryColor, size: 26);
+            }
+            return const IconThemeData(color: Color(0xFF999999), size: 24);
+          }),
+        ),
+        child: NavigationBar(
+          selectedIndex: _currentIndex,
+          onDestinationSelected: (index) => setState(() => _currentIndex = index),
+          backgroundColor: Colors.white,
+          elevation: 10,
+          shadowColor: Colors.black.withValues(alpha: 0.1),
+          destinations: [
+            NavigationDestination(
+              icon: const Icon(Icons.home_outlined), 
+              selectedIcon: const Icon(Icons.home_rounded),
+              label: l10n.home
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.devices_outlined), 
+              selectedIcon: const Icon(Icons.devices_rounded),
+              label: l10n.device
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.gamepad_outlined), 
+              selectedIcon: const Icon(Icons.gamepad_rounded),
+              label: l10n.control
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.person_outline_rounded), 
+              selectedIcon: const Icon(Icons.person_rounded),
+              label: l10n.mine
+            ),
+          ],
+        ),
       ),
     );
   }

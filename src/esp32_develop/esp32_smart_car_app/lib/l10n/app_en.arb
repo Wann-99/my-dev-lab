@@ -196,5 +196,7 @@
   "searchingDevices": "Searching for Devices",
   "searching": "Searching...",
   "noDevicesFound": "No devices found nearby",
-  "bindSuccess": "Device bound successfully"
+  "bindSuccess": "Device bound successfully",
+  "device": "Device",
+  "moreSettings": "More Settings"
 }

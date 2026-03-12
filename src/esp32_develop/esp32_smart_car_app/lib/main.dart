@@ -5,7 +5,7 @@ import 'l10n/app_localizations.dart';
 import 'models/car_state.dart';
 import 'pages/login_page.dart';
 import 'theme/app_theme.dart';
-import 'widgets/floating_status_ball.dart';
+import 'widgets/emergency_stop_button.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,7 +37,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       navigatorKey: navigatorKey,
       navigatorObservers: [routeObserver],
-      theme: AppTheme.darkTheme,
+      theme: AppTheme.lightTheme,
       locale: state.locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
@@ -47,27 +47,10 @@ class MyApp extends StatelessWidget {
           children: [
             // ignore: use_null_aware_elements
             if (child != null) child,
-            const GlobalFloatingBall(),
+            const EmergencyStopButton(),
           ],
         );
       },
     );
-  }
-}
-
-class GlobalFloatingBall extends StatefulWidget {
-  const GlobalFloatingBall({super.key});
-
-  @override
-  State<GlobalFloatingBall> createState() => _GlobalFloatingBallState();
-}
-
-class _GlobalFloatingBallState extends State<GlobalFloatingBall> {
-
-  @override
-  Widget build(BuildContext context) {
-    // Determine visibility based on navigator state
-    final hasHistory = MyApp.navigatorKey.currentState?.canPop() ?? false;
-    return hasHistory ? const FloatingStatusBall() : const SizedBox.shrink();
   }
 }

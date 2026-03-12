@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/car_state.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../l10n/app_localizations.dart';
-import 'package:flutter_mjpeg/flutter_mjpeg.dart';
-import 'control_page.dart';
-import 'package:flutter/services.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -16,386 +12,265 @@ class HomePage extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.appTitle, style: GoogleFonts.orbitron(fontWeight: FontWeight.bold)),
-        centerTitle: true,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildVideoPreview(context, state),
-            const SizedBox(height: 20),
-            _buildInfoGrid(context, state),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVideoPreview(BuildContext context, CarState state) {
-    final l10n = AppLocalizations.of(context)!;
-    final String videoUrl;
-
-    if (state.isRemoteMode) {
-      String host = state.relayServer;
-      if (!host.startsWith('http://') && !host.startsWith('https://')) {
-        host = 'http://$host';
-      }
-      videoUrl = "$host/stream/${state.deviceId}?ip=${state.cameraIp}";
-    } else {
-      videoUrl = 'http://${state.cameraIp}:81/stream';
-    }
-
-    final screenWidth = MediaQuery.of(context).size.width;
-    final previewHeight = screenWidth * 9 / 16;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(l10n.videoPreview, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 10),
-        Container(
-          height: previewHeight,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.black,
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: const Color(0xFF00F0FF).withValues(alpha: 0.3)),
+      backgroundColor: Colors.transparent, // Allow gradient to show through if wrapped
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF64B5F6), // Blue 400 (Sky top)
+              Color(0xFFBBDEFB), // Blue 100
+              Color(0xFFF5F6FA), // Light Gray (Bottom)
+            ],
+            stops: [0.0, 0.4, 1.0],
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(15),
-            child: state.cameraIp.isNotEmpty
-                ? Mjpeg(
-                    key: ValueKey(
-                      "home-${state.isRemoteMode}-${state.cameraIp}-${state.deviceId}-${state.relayServer}-${state.isConnected}",
-                    ),
-                    isLive: true,
-                    stream: videoUrl,
-                    error: (context, error, stack) => Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.videocam_off, color: Colors.grey, size: 40),
-                          const SizedBox(height: 10),
-                          Text(l10n.videoError, style: const TextStyle(color: Colors.grey)),
-                        ],
-                      ),
-                    ),
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverAppBar.large(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                pinned: true,
+                stretch: true,
+                title: Text(
+                  l10n.appTitle, 
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                    color: Colors.white,
+                    shadows: [Shadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
                   )
-                : const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.videocam_off, color: Colors.grey, size: 40),
-                        SizedBox(height: 10),
-                        Text("摄像头IP为空", style: TextStyle(color: Colors.grey)),
-                      ],
-                    ),
-                  ),
+                ),
+                actions: [
+                  const SizedBox(width: 8),
+                ],
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 100), // Extra bottom padding for fab/nav
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    _buildLargeControlCard(context, state, l10n),
+                    const SizedBox(height: 16),
+                    _buildDashboardGrid(context, state, l10n),
+                    const SizedBox(height: 20),
+                  ]),
+                ),
+              ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 
-  Widget _buildQuickActions(BuildContext context, CarState state) {
-    final l10n = AppLocalizations.of(context)!;
-    final bool canControl = state.isConnected && state.isBound;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _buildActionButton(
-                context,
-                l10n.emergencyStop,
-                Icons.pan_tool,
-                Colors.red,
-                canControl ? () => state.emergencyStop() : null,
-              ),
-            ),
-            const SizedBox(width: 15),
-            Expanded(
-              child: _buildActionButton(
-                context,
-                state.mode == 'MANUAL' ? l10n.switchToAuto : l10n.switchToManual,
-                state.mode == 'MANUAL' ? Icons.auto_mode : Icons.touch_app,
-                Colors.orange,
-                canControl ? () => state.setCarMode(state.mode == 'MANUAL' ? 'AUTO' : 'MANUAL') : null,
-              ),
-            ),
-          ],
-        ),
-        if (state.isConnected && !state.isBound)
-          Padding(
-            padding: const EdgeInsets.only(top: 10),
+  Widget _buildLargeControlCard(BuildContext context, CarState state, AppLocalizations l10n) {
+    final isConnected = state.isConnected;
+    
+    // Battery calculation (Assume 3S LiPo: 10.5V - 12.6V)
+    double batteryPct = 0.0;
+    if (state.carBattery > 0) {
+      batteryPct = ((state.carBattery - 10.5) / (12.6 - 10.5)).clamp(0.0, 1.0);
+    }
+    
+    return Container(
+      height: 140,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.85), // Glass effect
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF29B6F6).withValues(alpha: 0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {}, // Navigate to detail?
+          borderRadius: BorderRadius.circular(24),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
             child: Row(
               children: [
-                const Icon(Icons.info_outline, color: Colors.orange, size: 16),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: Text(
-                    "设备已连接，请先在“我的”页面完成绑定以解锁控制权限",
-                    style: TextStyle(color: Colors.orange[300], fontSize: 12),
+                SizedBox(
+                  width: 80,
+                  height: 80,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Battery Ring
+                      SizedBox(
+                        width: 80,
+                        height: 80,
+                        child: CircularProgressIndicator(
+                          value: isConnected ? batteryPct : 0,
+                          backgroundColor: const Color(0xFFE0E0E0),
+                          valueColor: AlwaysStoppedAnimation(
+                            isConnected 
+                              ? (batteryPct > 0.2 ? const Color(0xFF29B6F6) : const Color(0xFFFF5252)) 
+                              : Colors.transparent
+                          ),
+                          strokeWidth: 6,
+                          strokeCap: StrokeCap.round,
+                        ),
+                      ),
+                      // Icon Container
+                      Container(
+                        width: 64, // Slightly smaller to fit inside ring
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: isConnected ? const Color(0xFFE1F5FE) : const Color(0xFFFFEBEE),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          isConnected ? Icons.directions_car_rounded : Icons.car_crash_rounded,
+                          size: 32,
+                          color: isConnected ? const Color(0xFF29B6F6) : const Color(0xFFFF5252),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildActionButton(BuildContext context, String title, IconData icon, Color color, VoidCallback? onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(15),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 15),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color),
-            const SizedBox(height: 5),
-            Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSensorSection(BuildContext context, CarState state) {
-    final l10n = AppLocalizations.of(context)!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(l10n.sensorStatus, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildSensorItem(l10n.left, "${state.distLeft}cm", Icons.arrow_back, state.distLeft < 20 ? Colors.red : Colors.green),
-            _buildSensorItem(l10n.front, "${state.distFront}cm", Icons.arrow_upward, state.distFront < 20 ? Colors.red : Colors.green),
-            _buildSensorItem(l10n.right, "${state.distRight}cm", Icons.arrow_forward, state.distRight < 20 ? Colors.red : Colors.green),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSensorItem(String label, String value, IconData icon, Color color) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 20),
-        const SizedBox(height: 5),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-      ],
-    );
-  }
-
-  Widget _buildStatusCard(BuildContext context, CarState state) {
-    final l10n = AppLocalizations.of(context)!;
-    
-    // PRD: If not bound, show binding guide instead of connection status
-    if (!state.isBound) {
-      return Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.orange.withValues(alpha: 0.2), Colors.transparent],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-        ),
-        child: Column(
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.link_off, color: Colors.orange, size: 40),
-                SizedBox(width: 15),
+                const SizedBox(width: 20),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        "设备未绑定",
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        l10n.device, // "RoboCar-A"
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF333333),
+                        ),
                       ),
+                      const SizedBox(height: 6),
                       Text(
-                        "请先完成设备绑定以开始使用",
-                        style: TextStyle(color: Colors.grey),
+                        isConnected ? l10n.deviceOnline : l10n.deviceOffline,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isConnected ? const Color(0xFF29B6F6) : const Color(0xFFFF5252),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        isConnected ? "${l10n.battery} ${state.carBattery}V (${(batteryPct * 100).toInt()}%)" : l10n.pleaseConnect,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF999999),
+                        ),
                       ),
                     ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  // Navigate to MinePage (index 2 in MainScreen)
-                  // This is a bit hacky, better would be a direct navigation or state change
-                  // But for now, we'll suggest going to the Mine tab
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("请切换到“设备”页面进行设备搜索与绑定")),
-                    );
-                },
-                icon: const Icon(Icons.search),
-                label: const Text("去绑定设备"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            (state.isConnected ? Colors.green : const Color(0xFF00F0FF)).withValues(alpha: 0.2),
-            Colors.transparent
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: (state.isConnected ? Colors.green : const Color(0xFF00F0FF)).withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Icon(
-                state.isConnected ? Icons.check_circle : Icons.error_outline,
-                color: state.isConnected ? Colors.green : Colors.red,
-                size: 40,
-              ),
-              const SizedBox(width: 15),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      state.isConnected ? l10n.deviceOnline : l10n.deviceOffline,
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      state.isConnected ? l10n.connectionNormal : l10n.pleaseConnect,
-                      style: TextStyle(color: Colors.grey[400]),
-                    ),
-                  ],
-                ),
-              ),
-            ],
           ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    if (state.isConnected) {
-                      state.disconnect();
-                    } else {
-                      state.connect().then((success) {
-                        if (!success && context.mounted) {
-                          ScaffoldMessenger.of(context)
-                            ..clearSnackBars()
-                            ..showSnackBar(
-                              SnackBar(content: Text(l10n.connectionFailed)),
-                            );
-                        }
-                      });
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: state.isConnected ? Colors.red.withValues(alpha: 0.8) : const Color(0xFF00F0FF).withValues(alpha: 0.8),
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: Text(state.isConnected ? l10n.disconnectDevice : l10n.connectDevice),
-                ),
-              ),
-              if (state.isConnected) ...[
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: state.isBound
-                        ? () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("请在“控制”页面进入驾驶舱")),
-                            );
-                          }
-                        : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: state.isBound ? Colors.green.withValues(alpha: 0.8) : Colors.grey.withValues(alpha: 0.5),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: Text(state.isBound ? "进入驾驶舱" : "请先绑定设备", style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildInfoGrid(BuildContext context, CarState state) {
-    final l10n = AppLocalizations.of(context)!;
+  Widget _buildDashboardGrid(BuildContext context, CarState state, AppLocalizations l10n) {
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisCount: 2,
-      mainAxisSpacing: 15,
-      crossAxisSpacing: 15,
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 1.5, // Wider cards like Mi Home small cards
       children: [
-        _buildInfoItem(l10n.battery, "${state.carBattery}V", Icons.battery_charging_full, Colors.green),
-        _buildInfoItem(l10n.distance, "${state.distance}cm", Icons.settings_input_antenna, Colors.blue),
-        _buildInfoItem(l10n.mode, state.mode == 'MANUAL' ? l10n.manual : (state.mode == 'AUTO' ? l10n.auto : state.mode), Icons.settings, Colors.orange),
-        _buildInfoItem(l10n.signal, "${state.wifiSignal}dBm", Icons.wifi, Colors.purple),
+        _buildSmallCard(
+          l10n.signal, 
+          "${state.wifiSignal} dBm", 
+          Icons.wifi_rounded, 
+          const Color(0xFF42A5F5),
+          state.isConnected,
+        ),
+        _buildSmallCard(
+          l10n.distance, 
+          "${state.distance} cm", 
+          Icons.radar_rounded, 
+          const Color(0xFF66BB6A),
+          state.isConnected,
+        ),
+        _buildSmallCard(
+          l10n.mode, 
+          state.mode == 'MANUAL' ? l10n.manual : l10n.auto, 
+          Icons.settings_remote_rounded, 
+          const Color(0xFFAB47BC),
+          state.isConnected,
+        ),
+        _buildSmallCard(
+          "Camera", 
+          state.cameraIp.isNotEmpty ? "Online" : "Offline", 
+          Icons.videocam_rounded, 
+          const Color(0xFFFF7043),
+          state.isConnected,
+        ),
       ],
     );
   }
 
-  Widget _buildInfoItem(String title, String value, IconData icon, Color color) {
+  Widget _buildSmallCard(String title, String value, IconData icon, Color color, bool isEnabled) {
     return Container(
-      padding: const EdgeInsets.all(15),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A2E),
-        borderRadius: BorderRadius.circular(15),
+        color: Colors.white.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFE0E0E0).withValues(alpha: 0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Icon(icon, color: color, size: 30),
-          const SizedBox(height: 10),
-          Text(title, style: TextStyle(color: Colors.grey[400], fontSize: 14)),
-          const SizedBox(height: 5),
-          Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Icon(icon, color: isEnabled ? color : const Color(0xFFCCCCCC), size: 28),
+              if (!isEnabled)
+                const Icon(Icons.error_outline_rounded, size: 16, color: Color(0xFFCCCCCC)),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Color(0xFF333333),
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: TextStyle(
+                  color: isEnabled ? const Color(0xFF666666) : const Color(0xFFCCCCCC),
+                  fontSize: 12,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ],
       ),
     );

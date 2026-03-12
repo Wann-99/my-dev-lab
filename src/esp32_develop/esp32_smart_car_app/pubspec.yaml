@@ -46,8 +46,6 @@ dependencies:
   http: ^0.13.6
   gal: ^2.3.0
   permission_handler: ^11.0.1
-  shelf: ^1.4.1
-  network_info_plus: ^6.0.0
 
 dev_dependencies:
   flutter_launcher_icons: ^0.13.1
