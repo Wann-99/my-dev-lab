@@ -14,11 +14,14 @@
 #include "ultrasonic.h"
 #include "ota_server.h"
 #include "wireless_comm.h"
+#include "mqtt_app.h"
 
 #include "driver/gpio.h"
 #include "esp_adc/adc_oneshot.h"
 #include "esp_wifi.h"
 #include "esp_console.h"
+#include "esp_mac.h"
+#include "esp_timer.h"
 
 #define LIGHT_PIN 2
 #define HORN_PIN 3
@@ -166,6 +169,9 @@ void app_main(void)
     // Start mDNS service AFTER the server is ready
     start_mdns_service();
 
+    // Start MQTT Client
+    mqtt_app_start();
+
     ESP_LOGI(TAG, "RoboCar-A Ready! Connect to WS/HTTP on port 80");
     ESP_LOGI(TAG, "You can use serial command 'reset' to erase WiFi configuration.");
 
@@ -237,10 +243,33 @@ void app_main(void)
         int rssi = get_wifi_rssi();
         const char* cam_ip = wireless_comm_get_cam_ip();
         
-        char json_buf[192]; // Increased size for cam_ip
+        uint8_t mac[6];
+        esp_read_mac(mac, ESP_MAC_WIFI_STA);
+        char mac_str[18];
+        snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X", 
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        
+        int64_t uptime_s = esp_timer_get_time() / 1000000;
+        int days = uptime_s / 86400;
+        int hours = (uptime_s % 86400) / 3600;
+        char uptime_buf[32];
+        if (days > 0) {
+            snprintf(uptime_buf, sizeof(uptime_buf), "%d天 %d小时", days, hours);
+        } else {
+            snprintf(uptime_buf, sizeof(uptime_buf), "%d小时", hours);
+        }
+
+        // Get WiFi SSID
+        char ssid_str[33] = "Unknown";
+        wifi_config_t wifi_cfg;
+        if (esp_wifi_get_config(WIFI_IF_STA, &wifi_cfg) == ESP_OK) {
+            strncpy(ssid_str, (char*)wifi_cfg.sta.ssid, sizeof(ssid_str) - 1);
+        }
+        
+        char json_buf[320]; 
         snprintf(json_buf, sizeof(json_buf), 
-                 "{\"type\":\"status\",\"dist\":%.1f,\"v_car\":%.2f,\"rssi\":%d,\"mode\":\"%s\",\"cam_ip\":\"%s\"}", 
-                 distance, v_car, rssi, (g_car_mode == 1 ? "AUTO" : "MANUAL"), cam_ip);
+                 "{\"type\":\"status\",\"dist\":%.1f,\"v_car\":%.2f,\"rssi\":%d,\"mode\":\"%s\",\"cam_ip\":\"%s\",\"mac\":\"%s\",\"uptime\":\"%s\",\"ssid\":\"%s\"}", 
+                 distance, v_car, rssi, (g_car_mode == 1 ? "AUTO" : "MANUAL"), cam_ip, mac_str, uptime_buf, ssid_str);
         
         // Send to local clients
         websocket_server_broadcast(json_buf);
@@ -249,6 +278,9 @@ void app_main(void)
         if (websocket_client_is_connected()) {
             websocket_client_send(json_buf);
         }
+        
+        // Send via MQTT
+        mqtt_app_send_status(json_buf);
         
         // Heartbeat
         vTaskDelay(pdMS_TO_TICKS(500)); // Update every 500ms

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../l10n/app_localizations.dart';
 import '../models/car_state.dart';
+import '../l10n/app_localizations.dart';
 
 class DeviceConfigPage extends StatefulWidget {
   const DeviceConfigPage({super.key});
@@ -11,230 +11,103 @@ class DeviceConfigPage extends StatefulWidget {
 }
 
 class _DeviceConfigPageState extends State<DeviceConfigPage> {
-  double _maxSpeed = 0.7;
-  double _patrolSpeed = 0.4;
-  String _sensitivity = "Medium";
-  String _resolution = "1080P";
-  String _nightMode = "Auto";
-  String _aiDetection = "All";
-  double _detectionSensitivity = 0.75;
+  final _nameController = TextEditingController();
+  final _ipController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     final state = context.read<CarState>();
-    _maxSpeed = state.maxSpeed;
-    _patrolSpeed = state.patrolSpeed;
-    _sensitivity = state.sensitivity;
-    _resolution = state.resolution;
-    _nightMode = state.nightMode;
-    _aiDetection = state.aiDetection;
-    _detectionSensitivity = state.detectionSensitivity;
+    if (state.activeDevice != null) {
+      _nameController.text = state.activeDevice!.name;
+      _ipController.text = state.activeDevice!.ip;
+    }
   }
 
-  void _saveSettings() {
-    final state = context.read<CarState>();
-    final l10n = AppLocalizations.of(context)!;
-    state.saveAllSettings(
-      newMaxSpeed: _maxSpeed,
-      newPatrolSpeed: _patrolSpeed,
-      newSensitivity: _sensitivity,
-      newResolution: _resolution,
-      newNightMode: _nightMode,
-      newAiDetection: _aiDetection,
-      newDetectionSensitivity: _detectionSensitivity,
-    );
-
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(l10n.saved), 
-          backgroundColor: Colors.greenAccent,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _ipController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final state = context.watch<CarState>();
     final l10n = AppLocalizations.of(context)!;
-    final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          SliverAppBar.large(
-            title: Text(
-              l10n.deviceSettings, 
-              style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5, color: Color(0xFF333333))
+      appBar: AppBar(
+        title: const Text('设备配置'),
+        elevation: 0,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildTextField(
+              controller: _nameController,
+              label: '设备名称',
+              hint: '例如: Robot Car_1',
+              icon: Icons.edit_rounded,
             ),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: IconButton.filledTonal(
-                  onPressed: _saveSettings,
-                  icon: const Icon(Icons.save_rounded),
-                  style: IconButton.styleFrom(
-                    backgroundColor: primaryColor.withValues(alpha: 0.1),
-                    foregroundColor: primaryColor,
-                  ),
+            const SizedBox(height: 20),
+            _buildTextField(
+              controller: _ipController,
+              label: '设备 IP 地址',
+              hint: '192.168.x.x',
+              icon: Icons.lan_rounded,
+            ),
+            const SizedBox(height: 40),
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                onPressed: () {
+                  if (state.activeDevice != null) {
+                    state.renameDevice(state.activeDevice!.id, _nameController.text);
+                    // Update IP logic would be here if needed
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('配置已保存')));
+                    Navigator.pop(context);
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF29B6F6),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
+                child: const Text('保存配置', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
-            ],
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            stretch: true,
-            pinned: true,
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                _buildSection(l10n.motionSettings, [
-                  _buildSliderRow(l10n.maxSpeed, _maxSpeed, (v) => setState(() => _maxSpeed = v)),
-                  _buildSliderRow(l10n.patrolSpeed, _patrolSpeed, (v) => setState(() => _patrolSpeed = v)),
-                  _buildChoiceRow(
-                    l10n.obstacleSensitivity, 
-                    {"High": l10n.high, "Medium": l10n.medium, "Low": l10n.low}, 
-                    _sensitivity, 
-                    (v) => setState(() => _sensitivity = v)
-                  ),
-                ]),
-                const SizedBox(height: 24),
-                _buildSection(l10n.visionSettings, [
-                  _buildChoiceRow(l10n.videoResolution, {"1080P": "1080P", "720P": "720P", "480P": "480P"}, _resolution, (v) => setState(() => _resolution = v)),
-                  _buildChoiceRow(l10n.nightMode, {"Auto": l10n.auto, "On": l10n.on, "Off": l10n.off}, _nightMode, (v) => setState(() => _nightMode = v)),
-                  _buildChoiceRow(l10n.aiDetection, {"Person": l10n.person, "Pet": l10n.pet, "All": l10n.all}, _aiDetection, (v) => setState(() => _aiDetection = v)),
-                  _buildSliderRow(l10n.detectionSensitivity, _detectionSensitivity, (v) => setState(() => _detectionSensitivity = v)),
-                ]),
-                const SizedBox(height: 30),
-              ]),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildSection(String title, List<Widget> children) {
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 8, bottom: 12),
-          child: Text(
-            title, 
-            style: const TextStyle(
-              color: Color(0xFF999999), 
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.2,
-            )
+        Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF1E293B))),
+        const SizedBox(height: 10),
+        TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            hintText: hint,
+            prefixIcon: Icon(icon, color: const Color(0xFF29B6F6), size: 20),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
           ),
-        ),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFFE0E0E0).withValues(alpha: 0.5),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(children: children),
         ),
       ],
-    );
-  }
-
-  Widget _buildSliderRow(String label, double value, ValueChanged<double> onChanged) {
-    final primaryColor = Theme.of(context).colorScheme.primary;
-
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      title: Text(
-        label, 
-        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF333333))
-      ),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            trackHeight: 4,
-            activeTrackColor: primaryColor,
-            inactiveTrackColor: const Color(0xFFE0E0E0),
-            thumbColor: Colors.white,
-            overlayColor: primaryColor.withValues(alpha: 0.1),
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8, elevation: 2),
-            overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
-          ),
-          child: Slider(
-            value: value,
-            onChanged: onChanged,
-          ),
-        ),
-      ),
-      trailing: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: primaryColor.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          "${(value * 100).toInt()}%", 
-          style: TextStyle(color: primaryColor, fontSize: 13, fontWeight: FontWeight.bold)
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChoiceRow(String label, Map<String, String> choices, String current, ValueChanged<String> onSelected) {
-    final primaryColor = Theme.of(context).colorScheme.primary;
-
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      title: Text(
-        label, 
-        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF333333))
-      ),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 12),
-        child: Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: choices.entries.map((entry) {
-            final isSelected = entry.key == current;
-            return ChoiceChip(
-              label: Text(entry.value),
-              selected: isSelected,
-              onSelected: (val) {
-                if (val) onSelected(entry.key);
-              },
-              backgroundColor: const Color(0xFFF5F5F5),
-              selectedColor: primaryColor.withValues(alpha: 0.15),
-              labelStyle: TextStyle(
-                color: isSelected ? primaryColor : const Color(0xFF666666),
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(
-                  color: isSelected ? primaryColor.withValues(alpha: 0.5) : Colors.transparent,
-                  width: 1,
-                ),
-              ),
-              showCheckmark: false,
-            );
-          }).toList(),
-        ),
-      ),
     );
   }
 }

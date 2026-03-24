@@ -1,236 +1,160 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/car_state.dart';
 import '../l10n/app_localizations.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
+  late AnimationController _rotationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _rotationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 10),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _rotationController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<CarState>();
     final l10n = AppLocalizations.of(context)!;
-    
+
     return Scaffold(
-      backgroundColor: Colors.transparent, // Allow gradient to show through if wrapped
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF64B5F6), // Blue 400 (Sky top)
-              Color(0xFFBBDEFB), // Blue 100
-              Color(0xFFF5F6FA), // Light Gray (Bottom)
-            ],
-            stops: [0.0, 0.4, 1.0],
-          ),
-        ),
-        child: SafeArea(
-          bottom: false,
-          child: CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              SliverAppBar.large(
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                pinned: true,
-                stretch: true,
-                title: Text(
-                  l10n.appTitle, 
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
-                    color: Colors.white,
-                    shadows: [Shadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
-                  )
-                ),
-                actions: [
-                  const SizedBox(width: 8),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '主控大屏',
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+            ),
+            const SizedBox(height: 32),
+            
+            // Central Visual Display
+            AspectRatio(
+              aspectRatio: 1.2,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  CustomPaint(
+                    size: Size.infinite,
+                    painter: TechGridPainter(
+                      rotation: _rotationController,
+                      batteryPercentage: state.batteryPercentage,
+                      isConnected: state.isConnected,
+                    ),
+                  ),
+                  Container(
+                    width: 160,
+                    height: 160,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          Colors.white.withOpacity(0.9),
+                          const Color(0xFFF1F5F9).withOpacity(0.5),
+                        ],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (state.isConnected ? Colors.green : Colors.red).withOpacity(0.15),
+                          blurRadius: 25,
+                          spreadRadius: 2,
+                          offset: const Offset(0, 4),
+                        ),
+                        BoxShadow(
+                          color: Colors.white,
+                          blurRadius: 0,
+                          spreadRadius: -2,
+                        ),
+                      ],
+                    ),
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/car_model.png',
+                        fit: BoxFit.cover, // Cover ensure it fills the circle after crop
+                        errorBuilder: (context, error, stackTrace) => Icon(
+                          Icons.directions_car_rounded,
+                          size: 100,
+                          color: state.isConnected ? Colors.green : Colors.red,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 100), // Extra bottom padding for fab/nav
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    _buildLargeControlCard(context, state, l10n),
-                    const SizedBox(height: 16),
-                    _buildDashboardGrid(context, state, l10n),
-                    const SizedBox(height: 20),
-                  ]),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLargeControlCard(BuildContext context, CarState state, AppLocalizations l10n) {
-    final isConnected = state.isConnected;
-    
-    // Battery calculation (Assume 3S LiPo: 10.5V - 12.6V)
-    double batteryPct = 0.0;
-    if (state.carBattery > 0) {
-      batteryPct = ((state.carBattery - 10.5) / (12.6 - 10.5)).clamp(0.0, 1.0);
-    }
-    
-    return Container(
-      height: 140,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.85), // Glass effect
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF29B6F6).withValues(alpha: 0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {}, // Navigate to detail?
-          borderRadius: BorderRadius.circular(24),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
+            ),
+            
+            const SizedBox(height: 32),
+            
+            // Status Grid
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              mainAxisSpacing: 16,
+              crossAxisSpacing: 16,
+              childAspectRatio: 1.5,
               children: [
-                SizedBox(
-                  width: 80,
-                  height: 80,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Battery Ring
-                      SizedBox(
-                        width: 80,
-                        height: 80,
-                        child: CircularProgressIndicator(
-                          value: isConnected ? batteryPct : 0,
-                          backgroundColor: const Color(0xFFE0E0E0),
-                          valueColor: AlwaysStoppedAnimation(
-                            isConnected 
-                              ? (batteryPct > 0.2 ? const Color(0xFF29B6F6) : const Color(0xFFFF5252)) 
-                              : Colors.transparent
-                          ),
-                          strokeWidth: 6,
-                          strokeCap: StrokeCap.round,
-                        ),
-                      ),
-                      // Icon Container
-                      Container(
-                        width: 64, // Slightly smaller to fit inside ring
-                        height: 64,
-                        decoration: BoxDecoration(
-                          color: isConnected ? const Color(0xFFE1F5FE) : const Color(0xFFFFEBEE),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          isConnected ? Icons.directions_car_rounded : Icons.car_crash_rounded,
-                          size: 32,
-                          color: isConnected ? const Color(0xFF29B6F6) : const Color(0xFFFF5252),
-                        ),
-                      ),
-                    ],
-                  ),
+                _buildStatusCard(
+                  '网络信号',
+                  state.isConnected ? '${state.rssi} dBm' : '--',
+                  Colors.blue,
+                  Icons.wifi_rounded,
                 ),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        l10n.device, // "RoboCar-A"
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF333333),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        isConnected ? l10n.deviceOnline : l10n.deviceOffline,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: isConnected ? const Color(0xFF29B6F6) : const Color(0xFFFF5252),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        isConnected ? "${l10n.battery} ${state.carBattery}V (${(batteryPct * 100).toInt()}%)" : l10n.pleaseConnect,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF999999),
-                        ),
-                      ),
-                    ],
-                  ),
+                _buildStatusCard(
+                  '当前延迟',
+                  state.isConnected ? '${state.latency} ms' : '--',
+                  Colors.orange,
+                  Icons.timer_rounded,
+                ),
+                _buildStatusCard(
+                  '前方距离',
+                  state.isConnected ? (state.radarDistance > 600 || state.radarDistance < 2 ? '盲区' : '${state.radarDistance.toStringAsFixed(1)} cm') : '--',
+                  Colors.purple,
+                  Icons.straighten_rounded,
+                ),
+                _buildStatusCard(
+                  '当前模式',
+                  state.isConnected ? (state.isAutoMode ? 'AI 自动' : '手动控制') : '--',
+                  Colors.green,
+                  Icons.settings_suggest_rounded,
                 ),
               ],
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildDashboardGrid(BuildContext context, CarState state, AppLocalizations l10n) {
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.5, // Wider cards like Mi Home small cards
-      children: [
-        _buildSmallCard(
-          l10n.signal, 
-          "${state.wifiSignal} dBm", 
-          Icons.wifi_rounded, 
-          const Color(0xFF42A5F5),
-          state.isConnected,
-        ),
-        _buildSmallCard(
-          l10n.distance, 
-          "${state.distance} cm", 
-          Icons.radar_rounded, 
-          const Color(0xFF66BB6A),
-          state.isConnected,
-        ),
-        _buildSmallCard(
-          l10n.mode, 
-          state.mode == 'MANUAL' ? l10n.manual : l10n.auto, 
-          Icons.settings_remote_rounded, 
-          const Color(0xFFAB47BC),
-          state.isConnected,
-        ),
-        _buildSmallCard(
-          "Camera", 
-          state.cameraIp.isNotEmpty ? "Online" : "Offline", 
-          Icons.videocam_rounded, 
-          const Color(0xFFFF7043),
-          state.isConnected,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSmallCard(String title, String value, IconData icon, Color color, bool isEnabled) {
+  Widget _buildStatusCard(String title, String value, Color color, IconData icon) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFE0E0E0).withValues(alpha: 0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -239,40 +163,188 @@ class HomePage extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(icon, color: isEnabled ? color : const Color(0xFFCCCCCC), size: 28),
-              if (!isEnabled)
-                const Icon(Icons.error_outline_rounded, size: 16, color: Color(0xFFCCCCCC)),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, size: 16, color: color),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                title, 
+                style: const TextStyle(
+                  fontSize: 14, 
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF64748B)
+                )
+              ),
             ],
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Color(0xFF333333),
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: TextStyle(
-                  color: isEnabled ? const Color(0xFF666666) : const Color(0xFFCCCCCC),
-                  fontSize: 12,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 22, 
+              fontWeight: FontWeight.bold, 
+              color: const Color(0xFF1E293B), // Use dark color for value for better readability
+              letterSpacing: -0.5,
+            ),
           ),
         ],
       ),
     );
   }
+}
+
+class TechGridPainter extends CustomPainter {
+  final Animation<double> rotation;
+  final int batteryPercentage;
+  final bool isConnected;
+
+  TechGridPainter({
+    required this.rotation,
+    required this.batteryPercentage,
+    required this.isConnected,
+  }) : super(repaint: rotation);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) / 2;
+    
+    final gridPaint = Paint()
+      ..color = const Color(0xFF29B6F6).withOpacity(0.05)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+    
+    // 1. Draw background grid
+    const step = 20.0;
+    for (double i = 0; i < size.width; i += step) {
+      canvas.drawLine(Offset(i, 0), Offset(i, size.height), gridPaint);
+    }
+    for (double i = 0; i < size.height; i += step) {
+      canvas.drawLine(Offset(0, i), Offset(size.width, i), gridPaint);
+    }
+    
+    // 2. Outer Ring (Meteor & Star Tail Effect)
+    final meteorColor = isConnected ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+    final meteorRadius = radius * 0.85;
+    const int meteorCount = 2;
+
+    for (int i = 0; i < meteorCount; i++) {
+      final double baseAngle = (rotation.value * 2 * math.pi) + (i * math.pi);
+      
+      // Draw 3 tail lines with different lengths and radii
+      for (int j = 0; j < 3; j++) {
+        final double tailRadius = meteorRadius + (j - 1) * 3.5;
+        final double tailLength = (math.pi / 2.5) - (j * 0.15);
+        final double opacity = 0.8 - (j * 0.25);
+        
+        final tailPaint = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.5 - (j * 0.5)
+          ..strokeCap = StrokeCap.round
+          ..shader = SweepGradient(
+            colors: [
+              meteorColor.withOpacity(0),
+              meteorColor.withOpacity(opacity),
+            ],
+            stops: const [0.0, 1.0],
+            transform: GradientRotation(baseAngle - tailLength),
+          ).createShader(Rect.fromCircle(center: center, radius: tailRadius));
+
+        canvas.drawArc(
+          Rect.fromCircle(center: center, radius: tailRadius),
+          baseAngle - tailLength,
+          tailLength,
+          false,
+          tailPaint,
+        );
+      }
+
+      // Draw the Star at the head
+      final starPos = Offset(
+        center.dx + meteorRadius * math.cos(baseAngle),
+        center.dy + meteorRadius * math.sin(baseAngle),
+      );
+      
+      _drawStar(canvas, starPos, 7.0, Paint()..color = meteorColor..style = PaintingStyle.fill);
+    }
+
+    // 3. Inner Ring (Battery Fill)
+    final innerRingBgPaint = Paint()
+      ..color = Colors.grey.withOpacity(0.1)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 8.0
+      ..strokeCap = StrokeCap.round;
+
+    final batteryColor = _getBatteryColor(batteryPercentage);
+    final innerRingFillPaint = Paint()
+      ..color = batteryColor.withOpacity(0.8)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 8.0
+      ..strokeCap = StrokeCap.round;
+
+    // Draw background for battery ring
+    canvas.drawCircle(center, radius * 0.75, innerRingBgPaint);
+
+    // Draw battery fill arc
+    final sweepAngle = (batteryPercentage / 100) * 2 * math.pi;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius * 0.75),
+      -math.pi / 2, // Start from top
+      sweepAngle,
+      false,
+      innerRingFillPaint,
+    );
+
+    // 4. Center Diffusion Glow
+    final glowPaint = Paint()
+      ..color = (isConnected ? Colors.green : Colors.red).withOpacity(0.08)
+      ..style = PaintingStyle.fill
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 35);
+    canvas.drawCircle(center, radius * 0.55, glowPaint);
+  }
+
+  Color _getBatteryColor(int percentage) {
+    if (percentage > 60) return Colors.green;
+    if (percentage > 20) return Colors.orange;
+    return Colors.red;
+  }
+
+  void _drawStar(Canvas canvas, Offset center, double radius, Paint paint) {
+    final path = Path();
+    final angle = math.pi / 5;
+    for (int i = 0; i < 10; i++) {
+      final r = (i % 2 == 0) ? radius : radius * 0.45;
+      final currAngle = i * angle - math.pi / 2;
+      final x = center.dx + r * math.cos(currAngle);
+      final y = center.dy + r * math.sin(currAngle);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  void _drawDashedCircle(Canvas canvas, double x, double y, double radius, int segments, Paint paint) {
+    const dashLength = 10.0;
+    const gapLength = 5.0;
+    final totalLength = 2 * math.pi * radius;
+    final dashArc = (dashLength / totalLength) * 2 * math.pi;
+    final gapArc = (gapLength / totalLength) * 2 * math.pi;
+    
+    for (int i = 0; i < segments; i++) {
+      final startAngle = i * (dashArc + gapArc);
+      canvas.drawArc(Rect.fromCircle(center: Offset(x, y), radius: radius), startAngle, dashArc, false, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

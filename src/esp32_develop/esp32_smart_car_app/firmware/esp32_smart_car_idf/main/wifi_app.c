@@ -305,3 +305,48 @@ esp_err_t wifi_save_credentials(const char *ssid, const char *password)
     esp_restart();
     return ESP_OK;
 }
+
+esp_err_t wifi_test_connection(const char *ssid, const char *password)
+{
+    ESP_LOGI(TAG, "Testing WiFi connection to %s...", ssid);
+    
+    wifi_config_t old_config;
+    bool has_old_config = (esp_wifi_get_config(WIFI_IF_STA, &old_config) == ESP_OK);
+
+    wifi_config_t wifi_config = {
+        .sta = {
+            .threshold.authmode = WIFI_AUTH_OPEN,
+        },
+    };
+    strncpy((char*)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid));
+    strncpy((char*)wifi_config.sta.password, password, sizeof(wifi_config.sta.password));
+
+    // Clear bits
+    xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT);
+    
+    // Disconnect and apply new config
+    esp_wifi_disconnect();
+    esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
+    s_retry_num = 0; // Reset retry counter for test
+    esp_wifi_connect();
+
+    // Wait for connection or failure (max 10s for test)
+    EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
+            WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
+            pdFALSE,
+            pdFALSE,
+            pdMS_TO_TICKS(10000));
+
+    if (bits & WIFI_CONNECTED_BIT) {
+        ESP_LOGI(TAG, "Test connection SUCCESS");
+        return ESP_OK;
+    } else {
+        ESP_LOGW(TAG, "Test connection FAILED, reverting...");
+        if (has_old_config) {
+            esp_wifi_disconnect();
+            esp_wifi_set_config(WIFI_IF_STA, &old_config);
+            esp_wifi_connect();
+        }
+        return ESP_FAIL;
+    }
+}

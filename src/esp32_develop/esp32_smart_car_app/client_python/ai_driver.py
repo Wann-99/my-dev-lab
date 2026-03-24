@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-import websocket
+import paho.mqtt.client as mqtt
 import json
 import threading
 import time
@@ -14,10 +14,11 @@ CAMERA_IP = "192.168.1.101"
 CAMERA_PORT = 81
 CAMERA_URL = f"http://{CAMERA_IP}:{CAMERA_PORT}/stream"
 
-# ESP32-S3 (Car Control)
-CAR_IP = "192.168.1.102"
-CAR_PORT = 80
-CAR_WS_URL = f"ws://{CAR_IP}:{CAR_PORT}/ws"
+# MQTT Server
+MQTT_BROKER = "192.168.1.100"
+MQTT_PORT = 1883
+MQTT_USER = "robocar"
+MQTT_PASS = "smart2026"
 
 # Control Parameters
 CENTER_TOLERANCE = 50  # Deadzone in pixels
@@ -26,51 +27,55 @@ TURN_SPEED = 0.5       # Angular velocity (rad/s approx)
 
 class RoboCarAI:
     def __init__(self):
-        self.ws = None
+        self.mqtt_client = mqtt.Client()
         self.running = True
-        self.ws_connected = False
+        self.mqtt_connected = False
         
         # Load Face Cascade
         self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-    def on_message(self, ws, message):
-        # print(f"Car says: {message}")
+    def on_connect(self, client, userdata, flags, rc):
+        if rc == 0:
+            print(f"Connected to MQTT Broker at {MQTT_BROKER}")
+            self.mqtt_connected = True
+            self.mqtt_client.subscribe("robocar/status")
+        else:
+            print(f"Failed to connect to MQTT, return code {rc}")
+
+    def on_disconnect(self, client, userdata, rc):
+        print("Disconnected from MQTT Broker")
+        self.mqtt_connected = False
+
+    def on_message(self, client, userdata, msg):
+        # Handle status messages if needed
         pass
 
-    def on_error(self, ws, error):
-        print(f"WebSocket Error: {error}")
-
-    def on_close(self, ws, close_status_code, close_msg):
-        print("Disconnected from Car Control")
-        self.ws_connected = False
-
-    def on_open(self, ws):
-        print(f"Connected to Car Control at {CAR_WS_URL}")
-        self.ws_connected = True
-
-    def connect_car(self):
-        print(f"Connecting to Car Control: {CAR_WS_URL} ...")
-        self.ws = websocket.WebSocketApp(CAR_WS_URL,
-                                         on_open=self.on_open,
-                                         on_message=self.on_message,
-                                         on_error=self.on_error,
-                                         on_close=self.on_close)
-        self.ws.run_forever()
+    def connect_mqtt(self):
+        print(f"Connecting to MQTT Broker: {MQTT_BROKER} ...")
+        self.mqtt_client.username_pw_set(MQTT_USER, MQTT_PASS)
+        self.mqtt_client.on_connect = self.on_connect
+        self.mqtt_client.on_disconnect = self.on_disconnect
+        self.mqtt_client.on_message = self.on_message
+        
+        try:
+            self.mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
+            self.mqtt_client.loop_start()
+        except Exception as e:
+            print(f"MQTT Connection failed: {e}")
+            sys.exit(1)
 
     def send_command(self, cmd, **kwargs):
-        if self.ws_connected and self.ws:
+        if self.mqtt_connected:
             payload = {"cmd": cmd}
             payload.update(kwargs)
             try:
-                self.ws.send(json.dumps(payload))
+                self.mqtt_client.publish("robocar/control", json.dumps(payload))
             except Exception as e:
                 print(f"Failed to send command: {e}")
 
     def run(self):
-        # Start WebSocket in a separate thread
-        ws_thread = threading.Thread(target=self.connect_car)
-        ws_thread.daemon = True
-        ws_thread.start()
+        # Start MQTT Connection
+        self.connect_mqtt()
 
         # Open Video Stream
         print(f"Opening Video Stream: {CAMERA_URL} ...")
@@ -125,9 +130,7 @@ class RoboCarAI:
                 # Logic: Turn to center the face
                 if abs(error) > CENTER_TOLERANCE:
                     if error > 0:
-                        target_vw = -TURN_SPEED # Turn Right (Clockwise is negative usually, check robot frame)
-                        # Note: Check if Right is negative or positive for your specific robot
-                        # Usually: Left is +, Right is -
+                        target_vw = -TURN_SPEED # Turn Right
                         cv2.putText(frame, "Turn RIGHT", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                     else:
                         target_vw = TURN_SPEED # Turn Left
@@ -139,10 +142,8 @@ class RoboCarAI:
             current_time = time.time()
             if current_time - last_cmd_time > cmd_interval:
                 if detected:
-                    # Send movement command
                     self.send_command("move", vx=target_vx, vy=target_vy, vw=target_vw)
                 else:
-                    # Stop if nothing detected
                     self.send_command("move", vx=0.0, vy=0.0, vw=0.0)
                 
                 last_cmd_time = current_time
@@ -157,19 +158,19 @@ class RoboCarAI:
         # Cleanup
         cap.release()
         cv2.destroyAllWindows()
-        if self.ws:
-            self.ws.close()
+        self.mqtt_client.loop_stop()
+        self.mqtt_client.disconnect()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='RoboCar AI Driver')
     parser.add_argument('--cam_ip', type=str, help='Camera IP Address', default=CAMERA_IP)
-    parser.add_argument('--car_ip', type=str, help='Car Control IP Address', default=CAR_IP)
+    parser.add_argument('--mqtt_ip', type=str, help='MQTT Broker IP Address', default=MQTT_BROKER)
     
     args = parser.parse_args()
     
     # Update Globals from Args
     CAMERA_URL = f"http://{args.cam_ip}:{CAMERA_PORT}/stream"
-    CAR_WS_URL = f"ws://{args.car_ip}:{CAR_PORT}/ws"
+    MQTT_BROKER = args.mqtt_ip
     
     app = RoboCarAI()
     app.run()

@@ -11,6 +11,8 @@
 #include "nvs_flash.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
+#include "esp_mac.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "car_commands.h"
@@ -45,12 +47,112 @@ esp_err_t handle_car_command(const char *json_data, char *response_buffer, size_
     if (strcmp(cmd_str, "ping") == 0) {
         if (response_buffer) snprintf(response_buffer, response_len, "{\"res\":\"pong\"}");
     } else if (strcmp(cmd_str, "status") == 0) {
-        // App typically calls this to get initial state and CAM IP
-        const char* cam_ip = wireless_comm_get_cam_ip();
-        if (response_buffer) {
-            snprintf(response_buffer, response_len, 
-                "{\"res\":\"ok\",\"type\":\"status\",\"cam_ip\":\"%s\",\"camIP\":\"%s\",\"mode\":\"%s\",\"bat\":%.2f,\"rssi\":%d}",
-                cam_ip, cam_ip, g_car_mode == 1 ? "AUTO" : "MANUAL", get_battery_voltage(), get_wifi_rssi());
+        // Get Camera IP
+        const char *cam_ip = wireless_comm_get_cam_ip();
+
+        // Get WiFi SSID (STA or AP)
+        char ssid_str[33] = "Unknown";
+        wifi_config_t wifi_cfg;
+        memset(&wifi_cfg, 0, sizeof(wifi_cfg));
+        
+        wifi_mode_t mode;
+        if (esp_wifi_get_mode(&mode) == ESP_OK) {
+            if (mode == WIFI_MODE_STA || mode == WIFI_MODE_APSTA) {
+                // Try to get active STA info first (actual connection)
+                wifi_ap_record_t ap_info;
+                if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
+                    strncpy(ssid_str, (char*)ap_info.ssid, sizeof(ssid_str) - 1);
+                    ssid_str[sizeof(ssid_str) - 1] = '\0';
+                } else if (esp_wifi_get_config(WIFI_IF_STA, &wifi_cfg) == ESP_OK && strlen((char*)wifi_cfg.sta.ssid) > 0) {
+                    // Fallback to saved STA config if not currently connected but configured
+                    strncpy(ssid_str, (char*)wifi_cfg.sta.ssid, sizeof(ssid_str) - 1);
+                    ssid_str[sizeof(ssid_str) - 1] = '\0';
+                }
+            }
+            
+            // If still unknown and we have AP mode, get AP SSID
+            if (strcmp(ssid_str, "Unknown") == 0 && (mode == WIFI_MODE_AP || mode == WIFI_MODE_APSTA)) {
+                if (esp_wifi_get_config(WIFI_IF_AP, &wifi_cfg) == ESP_OK) {
+                    if (wifi_cfg.ap.ssid_len > 0) {
+                        int len = wifi_cfg.ap.ssid_len > 32 ? 32 : wifi_cfg.ap.ssid_len;
+                        memcpy(ssid_str, wifi_cfg.ap.ssid, len);
+                        ssid_str[len] = '\0';
+                    } else {
+                        strncpy(ssid_str, (char*)wifi_cfg.ap.ssid, sizeof(ssid_str) - 1);
+                        ssid_str[sizeof(ssid_str) - 1] = '\0';
+                    }
+                }
+            }
+        }
+
+        // Get MAC address
+        uint8_t mac[6];
+        char mac_str[18];
+        esp_read_mac(mac, ESP_MAC_WIFI_STA);
+        snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+        // Get Uptime (seconds)
+        int64_t uptime_s = esp_timer_get_time() / 1000000;
+        char uptime_buf[32];
+        snprintf(uptime_buf, sizeof(uptime_buf), "%lld", uptime_s);
+
+        // Build JSON response using cJSON for safety
+        cJSON *res = cJSON_CreateObject();
+        if (res) {
+            cJSON_AddStringToObject(res, "res", "ok");
+            cJSON_AddStringToObject(res, "type", "status");
+            cJSON_AddStringToObject(res, "cam_ip", cam_ip);
+            cJSON_AddStringToObject(res, "camIP", cam_ip);
+            cJSON_AddStringToObject(res, "mode", g_car_mode == 1 ? "AUTO" : "MANUAL");
+            cJSON_AddNumberToObject(res, "bat", get_battery_voltage());
+            cJSON_AddNumberToObject(res, "rssi", get_wifi_rssi());
+            cJSON_AddStringToObject(res, "mac", mac_str);
+            cJSON_AddStringToObject(res, "uptime", uptime_buf);
+            cJSON_AddStringToObject(res, "ssid", ssid_str);
+
+            char *json_str = cJSON_PrintUnformatted(res);
+            if (json_str) {
+                if (response_buffer) {
+                    strncpy(response_buffer, json_str, response_len - 1);
+                    response_buffer[response_len - 1] = '\0';
+                }
+                free(json_str);
+            }
+            cJSON_Delete(res);
+        }
+    } else if (strcmp(cmd_str, "info") == 0) {
+        // Get MAC address
+        uint8_t mac[6];
+        char mac_str[18];
+        esp_read_mac(mac, ESP_MAC_WIFI_STA);
+        snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+        // Get Uptime
+        int64_t uptime_s = esp_timer_get_time() / 1000000;
+        char uptime_buf[32];
+        snprintf(uptime_buf, sizeof(uptime_buf), "%lld", uptime_s);
+
+        // Build JSON response
+        cJSON *res = cJSON_CreateObject();
+        if (res) {
+            cJSON_AddStringToObject(res, "res", "ok");
+            cJSON_AddStringToObject(res, "type", "info");
+            cJSON_AddStringToObject(res, "mac", mac_str);
+            cJSON_AddStringToObject(res, "uptime", uptime_buf);
+            cJSON_AddStringToObject(res, "version", "1.2.0");
+            cJSON_AddStringToObject(res, "model", "RoboCar-A");
+
+            char *json_str = cJSON_PrintUnformatted(res);
+            if (json_str) {
+                if (response_buffer) {
+                    strncpy(response_buffer, json_str, response_len - 1);
+                    response_buffer[response_len - 1] = '\0';
+                }
+                free(json_str);
+            }
+            cJSON_Delete(res);
         }
     } else if (strcmp(cmd_str, "set_cam_ip") == 0) {
         cJSON *j_val = cJSON_GetObjectItem(root, "value");
@@ -175,6 +277,19 @@ esp_err_t handle_car_command(const char *json_data, char *response_buffer, size_
         if (j_val) val = j_val->valueint;
         ESP_LOGI(TAG, "CMD: speed set to %d", val);
         motor_set_max_speed(val * 10); 
+    } else if (strcmp(cmd_str, "resolution") == 0) {
+        cJSON *j_val = cJSON_GetObjectItem(root, "value");
+        if (j_val && cJSON_IsString(j_val)) {
+            ESP_LOGI(TAG, "CMD: resolution set to %s", j_val->valuestring);
+            wireless_comm_send_cam_ctrl("resolution", j_val->valuestring);
+        }
+    } else if (strcmp(cmd_str, "track") == 0) {
+        cJSON *j_target = cJSON_GetObjectItem(root, "target");
+        if (j_target && cJSON_IsString(j_target)) {
+            ESP_LOGI(TAG, "CMD: tracking target set to %s", j_target->valuestring);
+            // logic to set AI tracking target
+            g_car_mode = 1; // Auto mode for tracking
+        }
     } else if (strcmp(cmd_str, "pid_set") == 0) {
         float kp = 0, ki = 0, kd = 0;
         cJSON *j_kp = cJSON_GetObjectItem(root, "kp");
@@ -230,10 +345,23 @@ esp_err_t handle_car_command(const char *json_data, char *response_buffer, size_
     } else if (strcmp(cmd_str, "wifi_config") == 0) {
         cJSON *ssid = cJSON_GetObjectItem(root, "ssid");
         cJSON *pass = cJSON_GetObjectItem(root, "password");
+        cJSON *test = cJSON_GetObjectItem(root, "test"); // Optional flag to test before saving
+
         if (ssid && cJSON_IsString(ssid) && pass && cJSON_IsString(pass)) {
-            ESP_LOGI(TAG, "Command: New WiFi Config received. SSID: %s", ssid->valuestring);
-            if (response_buffer) snprintf(response_buffer, response_len, "{\"res\":\"ok\",\"msg\":\"credentials_saved_restarting\",\"type\":\"status_reset\"}");
-            wifi_save_credentials(ssid->valuestring, pass->valuestring);
+            ESP_LOGI(TAG, "Command: WiFi Config received. SSID: %s", ssid->valuestring);
+            
+            bool test_passed = true;
+            if (test && cJSON_IsTrue(test)) {
+                if (wifi_test_connection(ssid->valuestring, pass->valuestring) != ESP_OK) {
+                    test_passed = false;
+                    if (response_buffer) snprintf(response_buffer, response_len, "{\"res\":\"error\",\"msg\":\"wifi_test_failed\",\"type\":\"wifi_status\"}");
+                }
+            }
+
+            if (test_passed) {
+                if (response_buffer) snprintf(response_buffer, response_len, "{\"res\":\"ok\",\"msg\":\"credentials_saved_restarting\",\"type\":\"status_reset\"}");
+                wifi_save_credentials(ssid->valuestring, pass->valuestring);
+            }
         } else {
             if (response_buffer) snprintf(response_buffer, response_len, "{\"res\":\"error\",\"msg\":\"missing_ssid_or_password\"}");
         }

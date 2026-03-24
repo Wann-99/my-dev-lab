@@ -1,19 +1,24 @@
-# RoboCar-A: 基于 ESP32-S3 的智能小车控制系统
+# RoboCar-A: 基于双 MCU 的智能小车控制与 AI 视觉系统
 
-RoboCar-A 是一个集成了 Flutter 移动端应用与 ESP32-S3 固件的综合性智能小车控制方案。支持麦克纳姆轮全向移动、实时遥测数据监控、OTA 固件更新以及丰富的硬件控制接口。
+RoboCar-A 是一个集成了 Flutter 移动端应用、ESP32 双 MCU（S3 + CAM）固件以及 Python 服务端 AI 视觉的综合性智能小车方案。支持麦克纳姆轮全向移动、MJPEG 实时图传、AI 视觉跟随、内外网远程控制及基于云端的 OTA 固件更新。
 
 ## 🌟 核心特性
 
-- **全向移动控制**：完美支持麦克纳姆轮（Mecanum Wheel），实现前后、左右平移及原地自旋。
+- **双 MCU 解耦架构**：
+  - **主控 (ESP32-S3)**：负责电机、舵机、超声波及 MQTT 遥测，确保运动控制的低延迟。
+  - **图传 (ESP32-CAM)**：专职提供 HTTP MJPEG 视频流，保证画面高清流畅，不阻塞主控。
+- **全向移动与 AI 视觉控制**：
+  - 完美支持麦克纳姆轮，实现前后、左右平移及原地自旋。
+  - 服务端 Python 脚本基于 YOLO/OpenCV 自动分析图传画面，支持人脸/目标跟随。
+- **双协议无缝切换**：
+  - **局域网模式**：App 通过 WebSocket 直连小车，实现极致低延迟。
+  - **远程模式**：基于 MQTT 协议及 FRP 内网穿透，实现外网远程操控及多端协同。
+- **云端 OTA 自动升级**：
+  - App 启动或点击检查更新时，基于 GitHub 上的 `version.json` 自动对比版本。
+  - 支持 App 自身静默下载安装，以及对 S3/CAM 双固件的 8KB 分块流式更新（含 SHA256 校验）。
 - **实时数据遥测**：
-  - **超声波避障**：经过优化的滤波算法（五点中值+均值滤波），精度达 ±0.1cm，实时反馈前方障碍物距离。
-  - **电池电压监控**：实时采集动力电池电压，确保设备运行安全。
-  - **信号强度反馈**：实时监控 WiFi RSSI 信号强度。
-- **OTA 无线升级**：支持通过移动端 App 直接上传 `.bin` 固件，实现无线更新。
-- **多功能控制**：
-  - **灯光与喇叭**：通过 App 远程控制小车照明及警示音。
-  - **舵机云台**：集成 PCA9685 驱动，支持多路舵机（如云台、机械臂）的精细控制。
-- **自动设备发现**：基于 mDNS 协议，App 自动发现局域网内的 RoboCar-A 设备，无需手动输入 IP。
+  - 超声波盲区与精确距离（2cm - 600cm，精度 ±0.1cm）。
+  - 动态电池电压监测（支持 App 端万用表实测校准）。
 - **赛博朋克 UI**：HUD 风格的暗色调设计，提供极佳的操控沉浸感。
 
 ## 🛠️ 硬件配置 (ESP32-S3)
@@ -39,39 +44,43 @@ RoboCar-A 是一个集成了 Flutter 移动端应用与 ESP32-S3 固件的综合
 | **喇叭** | 输出控制 | 3 |
 | **电池电压检测** | ADC 输入 | 1 (ADC1_CH0) |
 
-## 🚀 软件快速上手
+## 🚀 软件与环境部署
 
-### 1. 固件编译与烧录 (ESP-IDF)
+### 1. 详细文档导航
+- [系统架构与使用说明 (PROJECT_OVERVIEW)](docs/PROJECT_OVERVIEW.md)
+- [服务器搭建与内网穿透部署 (SERVER_SETUP)](docs/SERVER_SETUP.md)
+- [遥测数据与通信协议说明 (TELEMETRY_DATA)](docs/TELEMETRY_DATA.md)
+- [OTA 自动发版脚本使用指南](docs/OTA_GUIDE.md)
+
+### 2. 固件编译与烧录 (ESP-IDF)
 **前提条件**：安装 ESP-IDF v5.3.1 或更高版本。
 
-1. 进入固件目录：
+1. 编译 S3 主控固件：
    ```bash
    cd firmware/esp32_smart_car_idf
-   ```
-2. 编译并烧录：
-   ```bash
    idf.py build flash monitor
    ```
-   *注意：生成的固件位于 `build/esp32_smart_car.bin`*
+2. 编译 CAM 图传固件：
+   ```bash
+   cd firmware/esp32_camera_idf
+   idf.py build flash monitor
+   ```
 
-### 2. App 运行 (Flutter)
+### 3. App 运行 (Flutter)
 **前提条件**：安装 Flutter SDK (推荐 3.10.7+)。
 
-1. 安装依赖：
+1. 安装依赖并运行：
    ```bash
    flutter pub get
-   ```
-2. 运行 App：
-   ```bash
    flutter run
    ```
 
-## 📡 通信协议
+## 📡 通信协议摘要
 
-设备通过 WebSocket (默认端口 80) 进行实时通信。
-- **移动控制**: `{"cmd": "move", "vx": float, "vy": float, "vw": float}`
-- **舵机控制**: `{"cmd": "servo", "channel": int, "angle": float}`
-- **硬件控制**: `{"cmd": "light", "value": int}`, `{"cmd": "horn", "value": int}`
+- **本地直连**：基于 WebSocket (端口 80)
+- **远程控制**：基于 MQTT (端口 1883)，主题 `robocar/control` 与 `robocar/status`
+- **视频流**：HTTP MJPEG (端口 81)
+- **指令格式示例**: `{"cmd": "move", "vx": 0.5, "vy": 0, "vw": 0.2}`
 
 ## 📝 维护与开发
 
