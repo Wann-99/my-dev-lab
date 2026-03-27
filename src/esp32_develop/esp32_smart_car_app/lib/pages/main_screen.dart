@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/car_state.dart';
 import '../l10n/app_localizations.dart';
+import '../widgets/emergency_stop_button.dart';
 import 'home_page.dart';
 import 'device_page.dart';
 import 'control_page.dart';
@@ -49,9 +50,14 @@ class _MainScreenState extends State<MainScreen> {
           ),
         ],
       ),
-      body: IndexedStack(
-        index: state.currentTabIndex,
-        children: _pages,
+      body: Stack(
+        children: [
+          IndexedStack(
+            index: state.currentTabIndex,
+            children: _pages,
+          ),
+          const EmergencyStopButton(),
+        ],
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(

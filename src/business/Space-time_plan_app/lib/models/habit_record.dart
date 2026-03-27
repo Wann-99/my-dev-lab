@@ -5,6 +5,7 @@ class CheckInLog {
   DateTime date; // 打卡日期 (仅年月日)
   bool isCompleted; // 当天是否完成
   int value; // 完成的数值
+  String? note; // 打卡心得
 
   CheckInLog({
     required this.id,
@@ -12,6 +13,7 @@ class CheckInLog {
     required this.date,
     this.isCompleted = false,
     this.value = 0,
+    this.note,
   });
 
   Map<String, dynamic> toJson() => {
@@ -20,6 +22,7 @@ class CheckInLog {
         'date': date.toIso8601String(),
         'isCompleted': isCompleted,
         'value': value,
+        'note': note,
       };
 
   factory CheckInLog.fromJson(Map<String, dynamic> json) => CheckInLog(
@@ -28,6 +31,7 @@ class CheckInLog {
         date: DateTime.parse(json['date']),
         isCompleted: json['isCompleted'],
         value: json['value'],
+        note: json['note'],
       );
 
   // Helper to easily strip time components from a DateTime

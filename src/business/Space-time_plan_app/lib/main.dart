@@ -2,12 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:space_time_plan_app/home_page.dart';
 import 'package:space_time_plan_app/providers/habit_provider.dart';
+import 'package:space_time_plan_app/services/notification_service.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   await initializeDateFormatting('zh_CN', null);
+  
+  // Initialize Notification Service
+  final notificationService = NotificationService();
+  await notificationService.init();
+  await notificationService.requestPermissions();
   
   final habitProvider = HabitProvider();
   await habitProvider.loadData();

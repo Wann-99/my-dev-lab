@@ -101,88 +101,85 @@ sudo systemctl enable robocar-ota
 
 ### 1. 环境安装
 
+> **注意**：服务器无桌面，必须安装 `opencv-python-headless` 而非 `opencv-python`
+
 ```bash
-pip3 install paho-mqtt opencv-python-headless numpy ultralytics
+pip3 install paho-mqtt opencv-python-headless numpy flask
 ```
 
-### 2. 运行视觉脚本
+### 2. 上传脚本
 
-将开发好的 `ai_driver.py` 放入 `/home/ubuntu/robocar_server/` 目录下。该脚本将订阅和发布 MQTT 消息。
-（推荐使用 `tmux` 或 `systemd` 将其挂载到后台运行）。
+将开发好的 `ai_driver.py` 放入 `/home/ann/robocar_server/` 目录下。
 
-### 使用 systemd（推荐最终部署使用）
-
-systemd 是 Linux 系统的服务管理工具。它可以将您的脚本变成一个系统级服务，支持 崩溃自动重启 和 开机自动启动 。
-
-1. 找出 Python 解释器和脚本的绝对路径 假设您的项目目录在 /home/ubuntu/esp32\_smart\_car\_app/client\_python 。
-   找出 python3 的路径（通常是 /usr/bin/python3 ，如果您用了虚拟环境请使用虚拟环境里的 python 路径）。
-2. 创建服务配置文件
-
-```
-sudo nano /etc/systemd/system/
-robocar-ai.service
+```bash
+mkdir -p /home/ubuntu/robocar_server/
+# 通过 scp 或 git 将 ai_driver.py 上传到此目录
 ```
 
-1. 填入以下配置内容 (注意修改 User 、 WorkingDirectory 和 ExecStart 里的路径为您服务器上的实际路径，以及脚本参数)
+### 3. 手动测试运行（推荐先测试）
 
+在正式部署为服务之前，先手动运行测试：
+
+```bash
+# --headless 参数在无桌面服务器上必须加，否则会因找不到显示器报错
+python3 /home/ubuntu/robocar_server/client_python/ai_driver.py \
+  --cam_ip 192.168.1.20 \
+  --mqtt_ip 127.0.0.1 \
+  --headless
 ```
+
+### 4. 使用 systemd 部署（推荐最终部署使用）
+
+systemd 可以将脚本变成系统级服务，支持崩溃自动重启和开机自动启动。
+
+**创建服务配置文件：**
+
+```bash
+sudo nano /etc/systemd/system/robocar-ai.service
+```
+
+**填入以下内容**（将 `--cam_ip` 的值替换为您实际的 ESP32-CAM IP 地址）：
+
+```ini
 [Unit]
-Description=RoboCar AI Vision Driver
-After=network.target mosquitto.
-service
+Description=RoboCar AI Vision Driver
+After=network.target mosquitto.service
 
 [Service]
 Type=simple
-User=ubuntu
-# 脚本所在的目录
-WorkingDirectory=/home/ubuntu/
-esp32_smart_car_app/client_python
-# 启动命令 (请确保填写真实的 IP)
-ExecStart=/usr/bin/python3 
-ai_driver.py --cam_ip 192.168.1.101 
---mqtt_ip 127.0.0.1
-# 如果脚本崩溃，5秒后自动重启
+User=ann
+WorkingDirectory=/home/ann/robocar_server/
+ExecStart=/usr/bin/python3 ai_driver.py --cam_ip 192.168.1.20 --mqtt_ip 127.0.0.1 --headless --stream_port 5001
 Restart=always
 RestartSec=5
-# 确保 Python 日志能够实时输出到 
-systemd
 Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-保存并退出（按 Ctrl+O ，回车，再按 Ctrl+X ）。
+保存并退出（按 `Ctrl+O`，回车，再按 `Ctrl+X`）。
 
-1. 重新加载并启动服务
+**重新加载并启动服务：**
 
-```
-# 重新加载 systemd 使配置生效
-sudo systemctl daemon-reload
-
-# 启动服务
-sudo systemctl start robocar-ai
-
-# 设置开机自启（可选）
-sudo systemctl enable robocar-ai
+```bash
+sudo systemctl daemon-reload
+sudo systemctl start robocar-ai
+sudo systemctl enable robocar-ai
 ```
 
-1. 查看运行状态和日志
+**查看运行状态和日志：**
 
-- 查看服务是否在运行：
-  ```
-  sudo systemctl status robocar-ai
-  ```
-- 实时查看脚本输出的日志（按 Ctrl+C 退出查看）：
-  ```
-  journalctl -u robocar-ai -f
-  ```
-- 停止服务：
-  ```
-  sudo systemctl stop robocar-ai
-  ```
+```bash
+# 查看服务状态
+sudo systemctl status robocar-ai
 
-### 总结建议：
+# 实时查看脚本日志（Ctrl+C 退出）
+journalctl -u robocar-ai -f
+
+# 停止服务
+sudo systemctl stop robocar-ai
+```
 
 ## 五、FRP 内网穿透配置
 
@@ -213,11 +210,11 @@ localIP = "127.0.0.1"
 localPort = 1883
 remotePort = 1883
 
-# 2. 穿透 ESP32-CAM 视频流 (假设小车IP为192.168.1.100)
+# 2. 穿透 ESP32-CAM 视频流（将 192.168.1.20 替换为实际 CAM IP）
 [[proxies]]
 name = "robocar-cam"
 type = "tcp"
-localIP = "192.168.1.100"
+localIP = "192.168.1.20" #--cam_ip
 localPort = 81
 remotePort = 8081
 

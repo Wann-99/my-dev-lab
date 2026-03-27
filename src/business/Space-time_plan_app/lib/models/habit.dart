@@ -15,8 +15,13 @@ class HabitPlan {
   String unit; // 单位，如"次"、"分钟"
   int dailyTarget; // 每日目标，如1
   int perComplete; // 单次完成量，如1
-  int status; // 0:进行中, 1:已完成, 2:已暂停
+  bool multiTarget; // 是否启用“每日打卡目标”
+  bool autoPopup; // 是否自动弹出打卡心得
+  String? checkInNote; // 打卡心得内容
+  int status; // 0:进行中（今日未打卡）, 1:今日已打卡, 2:已暂停
   int totalDays; // 累计打卡天数
+  bool autoReset; // 当日完成后，次日是否自动恢复为进行中
+  DateTime? completedDate; // 记录完成/归档的日期，用于次日自动恢复判断
 
   HabitPlan({
     required this.id,
@@ -32,8 +37,13 @@ class HabitPlan {
     required this.unit,
     required this.dailyTarget,
     required this.perComplete,
+    this.multiTarget = false,
+    this.autoPopup = true,
+    this.checkInNote,
     this.status = 0,
     this.totalDays = 0,
+    this.autoReset = true, // 默认次日自动恢复
+    this.completedDate,
   });
 
   Map<String, dynamic> toJson() => {
@@ -50,8 +60,13 @@ class HabitPlan {
         'unit': unit,
         'dailyTarget': dailyTarget,
         'perComplete': perComplete,
+        'multiTarget': multiTarget,
+        'autoPopup': autoPopup,
+        'checkInNote': checkInNote,
         'status': status,
         'totalDays': totalDays,
+        'autoReset': autoReset,
+        'completedDate': completedDate?.toIso8601String(),
       };
 
   factory HabitPlan.fromJson(Map<String, dynamic> json) => HabitPlan(
@@ -68,7 +83,13 @@ class HabitPlan {
         unit: json['unit'],
         dailyTarget: json['dailyTarget'],
         perComplete: json['perComplete'],
-        status: json['status'],
-        totalDays: json['totalDays'],
+        multiTarget: json['multiTarget'] ?? false,
+        autoPopup: json['autoPopup'] ?? true,
+        checkInNote: json['checkInNote'],
+        // 兼容旧数据：无 status 时视为进行中
+        status: (json['status'] is int) ? json['status'] as int : int.tryParse('${json['status']}') ?? 0,
+        totalDays: json['totalDays'] ?? 0,
+        autoReset: json['autoReset'] ?? true,
+        completedDate: json['completedDate'] != null ? DateTime.parse(json['completedDate']) : null,
       );
 }

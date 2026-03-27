@@ -92,6 +92,9 @@ class CarState extends ChangeNotifier {
   Timer? _connectionTimeoutTimer;
   int _latency = 0;
   Stopwatch _latencyStopwatch = Stopwatch();
+  // Monotonically increasing counter; each new connection gets its own generation.
+  // Async callbacks check this before acting to avoid stale events.
+  int _connectionGeneration = 0;
   
   // Settings
   bool _isRemoteMode = false;
@@ -102,6 +105,7 @@ class CarState extends ChangeNotifier {
   Locale _locale = const Locale('zh');
   String _currentAppVersion = '2.0.1';
   String _relayUrl = '';
+  String _camStreamUrl = ''; // Optional: override camera stream URL (e.g. for FRP WAN access)
   
   String get currentAppVersion => _currentAppVersion;
   
@@ -130,6 +134,7 @@ class CarState extends ChangeNotifier {
   String? get wifiConfigResult => _wifiConfigResult;
   
   String get carIp => activeDevice?.ip ?? '';
+  String get camIp => activeDevice?.cameraIp ?? '';
   String get wifiSsid => activeDevice?.wifiSsid ?? '--';
   String get macAddress => activeDevice?.macAddress ?? '--';
   String get uptime => activeDevice?.uptime ?? '00:00:00';
@@ -189,6 +194,7 @@ class CarState extends ChangeNotifier {
     _maxSpeed = prefs.getDouble('maxSpeed') ?? 0.5;
     _resolution = prefs.getString('resolution') ?? 'VGA';
     _relayUrl = prefs.getString('relayUrl') ?? '';
+    _camStreamUrl = prefs.getString('camStreamUrl') ?? '';
     
     final String lang = prefs.getString('language') ?? 'zh';
     _locale = Locale(lang);
@@ -205,10 +211,36 @@ class CarState extends ChangeNotifier {
     }
   }
 
-  void setAutoMode(bool autoMode) {
+  /// [remoteOverride]: explicitly choose remote(true) or local(false) path.
+  /// When null, falls back to the current [_isRemoteMode] setting.
+  void setAutoMode(bool autoMode, {bool? remoteOverride}) {
     _isAutoMode = autoMode;
-    // Send mode change command to car
-    sendCommand(jsonEncode({"cmd": "mode", "auto": _isAutoMode ? 1 : 0}));
+    final useRemote = remoteOverride ?? _isRemoteMode;
+
+    if (autoMode) {
+      if (useRemote) {
+        // Remote auto: notify Python ai_driver.py to start tracking via MQTT.
+        // Car stays in MANUAL so the script can send move commands freely.
+        if (_mqttClient != null && _isConnected) {
+          final builder = MqttClientPayloadBuilder();
+          builder.addString(jsonEncode({"active": true}));
+          _mqttClient!.publishMessage('robocar/ai_control', MqttQos.atMostOnce, builder.payload!);
+          debugPrint('[MQTT] ai_control: active=true');
+        }
+      } else {
+        // Local auto: activate the car's built-in obstacle-avoidance firmware.
+        sendCommand(jsonEncode({"cmd": "mode", "auto": 1}));
+      }
+    } else {
+      // Deactivate both paths to be safe.
+      sendCommand(jsonEncode({"cmd": "mode", "auto": 0}));
+      if (_mqttClient != null && _isConnected) {
+        final builder = MqttClientPayloadBuilder();
+        builder.addString(jsonEncode({"active": false}));
+        _mqttClient!.publishMessage('robocar/ai_control', MqttQos.atMostOnce, builder.payload!);
+        debugPrint('[MQTT] ai_control: active=false');
+      }
+    }
     notifyListeners();
   }
   
@@ -224,10 +256,18 @@ class CarState extends ChangeNotifier {
       _isRemoteMode = newIsRemoteMode;
       await prefs.setBool('isRemoteMode', _isRemoteMode);
       
-      // Reconnect with new protocol if already connected
+      // When mode changes, disconnect the old connection cleanly.
+      // Then schedule a reconnect with the new protocol after a short delay
+      // so all async disconnect callbacks from the old connection have time to fire
+      // and are rejected by the generation check before the new connection starts.
       if (modeChanged && (_isConnected || _isConnecting)) {
         disconnect();
-        connect();
+        _isManuallyDisconnected = false; // Allow the scheduled reconnect below
+        Future.delayed(const Duration(milliseconds: 400), () {
+          if (!_isManuallyDisconnected && carIp.isNotEmpty) {
+            connect();
+          }
+        });
       }
     }
     if (newShowEmergencyStop != null) {
@@ -526,10 +566,12 @@ class CarState extends ChangeNotifier {
   }
 
   void _connectWebSocket() {
-    debugPrint('[WS] Starting connection attempt to: $carIp');
+    final int myGen = ++_connectionGeneration;
+    debugPrint('[WS] Starting connection attempt to: $carIp (gen $myGen)');
     
     _connectionTimeoutTimer?.cancel();
     _connectionTimeoutTimer = Timer(const Duration(seconds: 10), () {
+      if (_connectionGeneration != myGen) return;
       if (_isConnecting && !_isConnected) {
         debugPrint('[WS] Connection attempt timed out for $carIp');
         _handleUnexpectedDisconnect('timeout');
@@ -542,9 +584,11 @@ class CarState extends ChangeNotifier {
       
       _wsChannel!.stream.listen(
         (message) {
+          if (_connectionGeneration != myGen) return;
           _handleMessage(message);
         },
         onDone: () {
+          if (_connectionGeneration != myGen) return;
           debugPrint('[WS] Stream closed for $carIp');
           if (!_isManuallyDisconnected) {
             _handleUnexpectedDisconnect('done');
@@ -553,6 +597,7 @@ class CarState extends ChangeNotifier {
           }
         },
         onError: (error) {
+          if (_connectionGeneration != myGen) return;
           debugPrint('[WS] Stream error for $carIp: $error');
           if (!_isManuallyDisconnected) {
             _handleUnexpectedDisconnect('error');
@@ -566,17 +611,20 @@ class CarState extends ChangeNotifier {
       _sendInfoCommand();
       notifyListeners();
     } catch (e) {
+      if (_connectionGeneration != myGen) return;
       debugPrint('[WS] Connection setup failed for $carIp: $e');
       _handleUnexpectedDisconnect('setup_failed');
     }
   }
 
   void _connectMQTT() async {
+    final int myGen = ++_connectionGeneration;
     final mqttHost = _relayUrl.isNotEmpty ? _relayUrl : carIp;
-    debugPrint('[MQTT] Starting connection attempt to: $mqttHost');
+    debugPrint('[MQTT] Starting connection attempt to: $mqttHost (gen $myGen)');
     
     _connectionTimeoutTimer?.cancel();
     _connectionTimeoutTimer = Timer(const Duration(seconds: 10), () {
+      if (_connectionGeneration != myGen) return;
       if (_isConnecting && !_isConnected) {
         debugPrint('[MQTT] Connection attempt timed out for $mqttHost');
         _handleUnexpectedDisconnect('timeout');
@@ -588,7 +636,8 @@ class CarState extends ChangeNotifier {
     _mqttClient!.logging(on: false);
     _mqttClient!.keepAlivePeriod = 20;
     _mqttClient!.onDisconnected = () {
-      debugPrint('[MQTT] Disconnected');
+      if (_connectionGeneration != myGen) return; // Stale callback from old connection
+      debugPrint('[MQTT] Disconnected (gen $myGen)');
       if (!_isManuallyDisconnected) {
         _handleUnexpectedDisconnect('disconnected');
       } else {
@@ -596,7 +645,8 @@ class CarState extends ChangeNotifier {
       }
     };
     _mqttClient!.onConnected = () {
-      debugPrint('[MQTT] Connected');
+      if (_connectionGeneration != myGen) return;
+      debugPrint('[MQTT] Connected (gen $myGen)');
       _isConnecting = false;
       _isConnected = true;
       _connectionTimeoutTimer?.cancel();
@@ -609,6 +659,7 @@ class CarState extends ChangeNotifier {
       
       // Listen to updates
       _mqttClient!.updates!.listen((List<MqttReceivedMessage<MqttMessage?>>? c) {
+        if (_connectionGeneration != myGen) return;
         final recMess = c![0].payload as MqttPublishMessage;
         final pt = MqttPublishPayload.bytesToStringAsString(recMess.payload.message);
         if (c[0].topic == 'robocar/status') {
@@ -619,7 +670,6 @@ class CarState extends ChangeNotifier {
       notifyListeners();
     };
     
-    // Setup authentication if needed, using the default user from python script
     final connMess = MqttConnectMessage()
         .withClientIdentifier('flutter_client_${DateTime.now().millisecondsSinceEpoch}')
         .authenticateAs('robocar', 'smart2026')
@@ -630,8 +680,10 @@ class CarState extends ChangeNotifier {
     try {
       await _mqttClient!.connect();
     } catch (e) {
-      debugPrint('[MQTT] Connection setup failed for $carIp: $e');
+      if (_connectionGeneration != myGen) return;
+      debugPrint('[MQTT] Connection setup failed for $mqttHost: $e');
       _mqttClient?.disconnect();
+      _mqttClient = null;
       _handleUnexpectedDisconnect('setup_failed');
     }
   }
@@ -639,12 +691,19 @@ class CarState extends ChangeNotifier {
   void disconnect() {
     debugPrint('[Connection] Manual disconnect requested');
     _isManuallyDisconnected = true;
-    _wsChannel?.sink.close();
-    _mqttClient?.disconnect();
+    _connectionGeneration++; // Invalidate all pending async callbacks immediately
+    // Capture and null out before calling disconnect to prevent re-entry
+    final ws = _wsChannel;
+    final mqtt = _mqttClient;
+    _wsChannel = null;
+    _mqttClient = null;
+    ws?.sink.close();
+    mqtt?.disconnect();
     _cleanupConnection();
   }
 
   void _cleanupConnection() {
+    // Null-safe: ws/mqtt may already be null if disconnect() was called first
     _wsChannel?.sink.close();
     _wsChannel = null;
     _mqttClient?.disconnect();
@@ -758,6 +817,12 @@ class CarState extends ChangeNotifier {
       }
       if (data['version'] != null) device.firmwareVersion = data['version'];
       if (data['cam_version'] != null) device.camFirmwareVersion = data['cam_version'];
+
+      // Parse camera IP from status message (sent by car board via ESP-NOW wireless_comm)
+      final String? receivedCamIp = (data['cam_ip'] ?? data['camIP'])?.toString();
+      if (receivedCamIp != null && receivedCamIp.isNotEmpty && receivedCamIp != 'null') {
+        device.cameraIp = receivedCamIp;
+      }
       
       // Handle special message types
       if (data['type'] == 'scan_results') {
@@ -820,6 +885,13 @@ class CarState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setCamStreamUrl(String url) async {
+    _camStreamUrl = url;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('camStreamUrl', url);
+    notifyListeners();
+  }
+
   void _sendInfoCommand() {
     if ((_isConnected || _isConnecting)) {
       _latencyStopwatch.start();
@@ -859,6 +931,10 @@ class CarState extends ChangeNotifier {
   String get appChangelog => _appChangelog;
   String get appDownloadUrl => _appDownloadUrl;
   String get relayUrl => _relayUrl;
+  String get camStreamUrl => _camStreamUrl;
+  /// URL of the Python AI server's processed MJPEG stream (with detection boxes).
+  /// Available at port 5001 on the same host as the MQTT broker.
+  String get aiStreamUrl => _relayUrl.isNotEmpty ? 'http://$_relayUrl:5001/ai_stream' : '';
 
   Future<void> checkUpdates() async {
     if (_isCheckingUpdates) return;

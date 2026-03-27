@@ -50,7 +50,11 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                 memcpy(payload, event->data, event->data_len);
                 payload[event->data_len] = '\0';
                 ESP_LOGI(TAG, "Received payload: %s", payload);
-                handle_car_command(payload);
+                char response_buf[512] = {0};
+                handle_car_command(payload, response_buf, sizeof(response_buf));
+                if (response_buf[0] != '\0') {
+                    mqtt_app_send_status(response_buf);
+                }
                 free(payload);
             }
         }
@@ -72,10 +76,18 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 
 esp_err_t mqtt_app_start(void)
 {
-    // 在真实场景中，应从 config_storage 获取 broker_url、username、password
-    // 这里作为示例使用默认值
+    car_config_t cfg = {0};
+    char broker_uri[MAX_CONFIG_LEN + 10] = "mqtt://192.168.1.110"; // fallback default
+
+    if (load_car_config(&cfg) == ESP_OK && strlen(cfg.relay_url) > 0) {
+        snprintf(broker_uri, sizeof(broker_uri), "mqtt://%s", cfg.relay_url);
+        ESP_LOGI(TAG, "Using broker from NVS: %s", broker_uri);
+    } else {
+        ESP_LOGW(TAG, "No broker config in NVS, using default: %s", broker_uri);
+    }
+
     esp_mqtt_client_config_t mqtt_cfg = {
-        .broker.address.uri = "mqtt://192.168.1.100", // 替换为服务器IP
+        .broker.address.uri = broker_uri,
         .credentials.username = "robocar",
         .credentials.authentication.password = "smart2026",
     };

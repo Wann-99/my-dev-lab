@@ -72,6 +72,12 @@ class _MinePageState extends State<MinePage> with SingleTickerProviderStateMixin
                       ),
                       _buildDivider(),
                       _buildListItem(
+                        title: '摄像头流地址',
+                        trailingText: state.camStreamUrl.isEmpty ? '自动' : state.camStreamUrl,
+                        onTap: () => _showCamStreamUrlDialog(context, state),
+                      ),
+                      _buildDivider(),
+                      _buildListItem(
                         title: '远程控制模式',
                         trailingWidget: Switch(
                           value: state.isRemoteMode,
@@ -81,15 +87,16 @@ class _MinePageState extends State<MinePage> with SingleTickerProviderStateMixin
                               _showRelayUrlDialog(context, state);
                               return;
                             }
-                            state.saveAllSettings(newIsRemoteMode: val);
-                            if (val && state.isConnected) {
-                              // Send relay config to device if turning on
+                            // Send set_relay BEFORE switching mode,
+                            // so the command goes out over the existing connection.
+                            if (val && state.isConnected && !state.isRemoteMode) {
                               state.sendCommand(jsonEncode({
                                 "cmd": "set_relay",
                                 "url": state.relayUrl,
                                 "id": state.activeDevice?.id ?? "unknown"
                               }));
                             }
+                            state.saveAllSettings(newIsRemoteMode: val);
                           },
                           activeTrackColor: const Color(0xFF29B6F6),
                           activeThumbColor: Colors.white,
@@ -345,6 +352,57 @@ class _MinePageState extends State<MinePage> with SingleTickerProviderStateMixin
           ElevatedButton(
             onPressed: () {
               state.setRelayUrl(controller.text.trim());
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF29B6F6)),
+            child: const Text('保存', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCamStreamUrlDialog(BuildContext context, CarState state) {
+    final controller = TextEditingController(text: state.camStreamUrl);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('摄像头流地址'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '留空则自动选择（本地模式直连 camIP:81，远程模式使用 MQTT服务器IP:8081）\n\n'
+              '若需 FRP 公网访问，填写完整 URL，例如：\n'
+              'http://公网IP:8081/stream',
+              style: TextStyle(fontSize: 12, color: Colors.grey, height: 1.5),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                hintText: "http://公网IP:8081/stream",
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              autofocus: true,
+              keyboardType: TextInputType.url,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              state.setCamStreamUrl('');
+              Navigator.pop(context);
+            },
+            child: const Text('清除', style: TextStyle(color: Colors.red)),
+          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+          ElevatedButton(
+            onPressed: () {
+              state.setCamStreamUrl(controller.text.trim());
               Navigator.pop(context);
             },
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF29B6F6)),

@@ -130,16 +130,87 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                   Colors.purple,
                   Icons.straighten_rounded,
                 ),
-                _buildStatusCard(
-                  '当前模式',
-                  state.isConnected ? (state.isAutoMode ? 'AI 自动' : '手动控制') : '--',
-                  Colors.green,
-                  Icons.settings_suggest_rounded,
-                ),
+                _buildModeCard(state),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildModeCard(CarState state) {
+    final String modeLabel;
+    final Color modeColor;
+    final IconData modeIcon;
+
+    if (!state.isConnected) {
+      modeLabel = '--';
+      modeColor = const Color(0xFF94A3B8);
+      modeIcon = Icons.settings_suggest_rounded;
+    } else if (!state.isRemoteMode) {
+      modeLabel = '本地手动';
+      modeColor = Colors.green;
+      modeIcon = Icons.wifi_rounded;
+    } else if (!state.isAutoMode) {
+      modeLabel = '远程手动';
+      modeColor = Colors.orange;
+      modeIcon = Icons.cloud_outlined;
+    } else {
+      modeLabel = '远程自动';
+      modeColor = Colors.purple;
+      modeIcon = Icons.smart_toy_rounded;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: state.isConnected ? Border.all(color: modeColor.withOpacity(0.3), width: 1.5) : null,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: modeColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(modeIcon, size: 16, color: modeColor),
+              ),
+              const SizedBox(width: 10),
+              const Text(
+                '当前模式',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+            ],
+          ),
+          Text(
+            modeLabel,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: state.isConnected ? modeColor : const Color(0xFF1E293B),
+              letterSpacing: -0.5,
+            ),
+          ),
+        ],
       ),
     );
   }
