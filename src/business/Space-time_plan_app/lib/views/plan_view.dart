@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:space_time_plan_app/models/habit.dart';
 import 'package:space_time_plan_app/providers/habit_provider.dart';
+import 'package:space_time_plan_app/utils/modal_sheet_utils.dart';
 import 'package:space_time_plan_app/widgets/edit_habit_bottom_sheet.dart';
+import 'package:space_time_plan_app/widgets/glass_card.dart';
 import 'package:intl/intl.dart';
 
 class PlanView extends StatefulWidget {
@@ -15,8 +17,8 @@ class PlanView extends StatefulWidget {
   State<PlanView> createState() => _PlanViewState();
 }
 
-class _PlanViewState extends State<PlanView> {
-  final DateTime _today = DateTime(
+class _PlanViewState extends State<PlanView> with WidgetsBindingObserver {
+  DateTime _today = DateTime(
       DateTime.now().year, DateTime.now().month, DateTime.now().day);
   int _currentTab = 0; // 0: 我的一天, 1: 周, 2: 我的一月
 
@@ -38,6 +40,38 @@ class _PlanViewState extends State<PlanView> {
   void initState() {
     super.initState();
     _weekSelectedDay = _today;
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshIfNewDay();
+    }
+  }
+
+  void _refreshIfNewDay() {
+    final now = DateTime(
+        DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    if (now != _today) {
+      setState(() {
+        _today = now;
+        // 若周视图选中的是"旧今天"，同步更新
+        if (_weekSelectedDay == _today ||
+            _weekOffset != 0) {
+          _weekOffset = 0;
+          _weekSelectedDay = now;
+        }
+      });
+      // 通知 provider 执行跨天重置
+      context.read<HabitProvider>().checkNewDay();
+    }
   }
 
   void _showCheckInNoteBottomSheet(HabitPlan habit, [DateTime? date]) {
@@ -45,50 +79,64 @@ class _PlanViewState extends State<PlanView> {
     final provider = context.read<HabitProvider>();
     final record = provider.getHabitRecordForDate(habit.id, targetDate);
     final controller = TextEditingController(text: record?.note ?? habit.checkInNote ?? '');
+    popOpenModalBottomSheets(context);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
+      barrierColor: Colors.black.withValues(alpha: 0.35),
       backgroundColor: Colors.transparent,
       builder: (context) {
         return Container(
           decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
+            color: AppTheme.bgCard,
+            borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
           ),
           padding: EdgeInsets.only(
             left: 20,
             right: 20,
-            top: 16,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+            top: 20,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 28,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Container(width: 36, height: 4, margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(color: AppTheme.border, borderRadius: BorderRadius.circular(2))),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: const Text('跳过', style: TextStyle(color: Colors.grey, fontSize: 16)),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('跳过', style: TextStyle(color: AppTheme.textSecondary, fontSize: 15)),
                   ),
-                  const Text('打卡心得', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  GestureDetector(
-                    onTap: () {
+                  const Text('打卡心得', style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
+                  TextButton(
+                    onPressed: () {
                       final text = controller.text.trim();
-                      provider.updateCheckInNote(habit.id, _today, text.isEmpty ? null : text);
+                      provider.updateCheckInNote(
+                          habit.id, targetDate, text.isEmpty ? null : text);
                       Navigator.pop(context);
                     },
-                    child: const Text('保存', style: TextStyle(color: Color(0xFF5599FF), fontSize: 16, fontWeight: FontWeight.bold)),
+                    child: const Text('保存', style: TextStyle(color: AppTheme.primary, fontSize: 15, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
-              const Divider(height: 24),
+              const SizedBox(height: 8),
               TextField(
                 controller: controller,
-                maxLines: 6,
-                decoration: const InputDecoration(
+                maxLines: 5,
+                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15, height: 1.5),
+                decoration: InputDecoration(
                   hintText: '写下打卡心得（可选）',
-                  border: OutlineInputBorder(),
+                  hintStyle: const TextStyle(color: AppTheme.textHint, fontSize: 14),
+                  filled: true,
+                  fillColor: AppTheme.bgMain,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.border)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.border)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.primary, width: 1.5)),
+                  contentPadding: const EdgeInsets.all(14),
                 ),
               ),
             ],
@@ -110,12 +158,12 @@ class _PlanViewState extends State<PlanView> {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         decoration: BoxDecoration(
-          color: selected ? Colors.white : Colors.transparent,
+            color: selected ? Colors.white : Colors.transparent,
           borderRadius: BorderRadius.circular(7),
           boxShadow: selected
               ? [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
+                    color: AppTheme.primary.withValues(alpha: 0.10),
                     blurRadius: 4,
                     offset: const Offset(0, 1),
                   )
@@ -127,7 +175,7 @@ class _PlanViewState extends State<PlanView> {
           style: TextStyle(
             fontSize: 13,
             fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-            color: selected ? const Color(0xFF5599FF) : Colors.black45,
+            color: selected ? AppTheme.primary : AppTheme.textSecondary,
           ),
         ),
       ),
@@ -152,10 +200,11 @@ class _PlanViewState extends State<PlanView> {
     formattedDate = '${DateFormat('MM / dd').format(_today)} ${weekdays[_today.weekday - 1]}';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: AppTheme.bgMain,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF0F2F5),
+        backgroundColor: AppTheme.bgMain,
         elevation: 0,
+        surfaceTintColor: Colors.transparent,
         automaticallyImplyLeading: false,
         titleSpacing: 16,
         title: Row(
@@ -171,7 +220,7 @@ class _PlanViewState extends State<PlanView> {
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
-                  color: Colors.black87,
+                  color: AppTheme.textPrimary,
                 ),
               ),
             ),
@@ -180,7 +229,7 @@ class _PlanViewState extends State<PlanView> {
               height: 34,
               padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.06),
+                color: AppTheme.primaryLight,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
@@ -195,30 +244,11 @@ class _PlanViewState extends State<PlanView> {
           ],
         ),
       ),
-      body: Stack(
-        children: [
-          if (_currentTab == 0)
-            _buildDayView(items, provider)
-          else if (_currentTab == 1)
-            _buildWeekView(provider)
-          else
-            _buildMonthView(provider),
-          
-          // Floating Action Button
-          Positioned(
-            bottom: 24,
-            right: 24,
-            child: FloatingActionButton(
-              heroTag: 'plan_add',
-              backgroundColor: const Color(0xFF5599FF),
-              elevation: 4,
-              onPressed: widget.onAddTap,
-              child: const Icon(Icons.add, size: 32, color: Colors.white),
-              shape: const CircleBorder(),
-            ),
-          ),
-        ],
-      ),
+      body: _currentTab == 0
+          ? _buildDayView(items, provider)
+          : (_currentTab == 1
+              ? _buildWeekView(provider)
+              : _buildMonthView(provider)),
     );
   }
 
@@ -246,7 +276,7 @@ class _PlanViewState extends State<PlanView> {
       children: [
         // ── 周导航 + 7 天日期条 ─────────────────────────────
         Container(
-          color: Colors.white,
+          color: AppTheme.bgCard,
           child: Column(
             children: [
               // 上下周切换
@@ -257,7 +287,7 @@ class _PlanViewState extends State<PlanView> {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.chevron_left, size: 22),
-                      color: Colors.black45,
+                      color: AppTheme.textSecondary,
                       onPressed: () => setState(() {
                         _weekOffset--;
                         // 选中新周内最近的一天（偏移周内同一个 weekday）
@@ -275,8 +305,8 @@ class _PlanViewState extends State<PlanView> {
                             horizontal: 14, vertical: 4),
                         decoration: BoxDecoration(
                           color: _weekOffset == 0
-                              ? const Color(0xFF5599FF).withValues(alpha: 0.1)
-                              : Colors.grey[100],
+                              ? AppTheme.primaryLight
+                              : AppTheme.bgMain,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
@@ -284,7 +314,7 @@ class _PlanViewState extends State<PlanView> {
                           style: TextStyle(
                             fontSize: 13,
                             color: _weekOffset == 0
-                                ? const Color(0xFF5599FF)
+                                ? AppTheme.primary
                                 : Colors.black54,
                             fontWeight: _weekOffset == 0
                                 ? FontWeight.bold
@@ -295,7 +325,7 @@ class _PlanViewState extends State<PlanView> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.chevron_right, size: 22),
-                      color: Colors.black45,
+                      color: AppTheme.textSecondary,
                       onPressed: () => setState(() {
                         _weekOffset++;
                         _weekSelectedDay = _weekSelectedDay
@@ -337,15 +367,14 @@ class _PlanViewState extends State<PlanView> {
                               height: 36,
                               decoration: BoxDecoration(
                                 color: isSelected
-                                    ? const Color(0xFF5599FF)
+                                    ? AppTheme.primary
                                     : (isToday
-                                        ? const Color(0xFF5599FF)
-                                            .withValues(alpha: 0.1)
+                                        ? AppTheme.primaryLight
                                         : Colors.transparent),
                                 shape: BoxShape.circle,
                                 border: isToday && !isSelected
                                     ? Border.all(
-                                        color: const Color(0xFF5599FF),
+                                        color: AppTheme.primary,
                                         width: 1.5)
                                     : null,
                               ),
@@ -360,8 +389,8 @@ class _PlanViewState extends State<PlanView> {
                                     color: isSelected
                                         ? Colors.white
                                         : (isToday
-                                            ? const Color(0xFF5599FF)
-                                            : Colors.black87),
+                                            ? AppTheme.primary
+                                            : AppTheme.textPrimary),
                                   ),
                                 ),
                               ),
@@ -385,7 +414,7 @@ class _PlanViewState extends State<PlanView> {
 
         // ── 选中日期标签 ─────────────────────────────────────
         Container(
-          color: const Color(0xFFF0F2F5),
+          color: AppTheme.bgMain,
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
           child: Row(
             children: [
@@ -396,7 +425,7 @@ class _PlanViewState extends State<PlanView> {
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: AppTheme.textPrimary,
                 ),
               ),
               const SizedBox(width: 8),
@@ -459,7 +488,7 @@ class _PlanViewState extends State<PlanView> {
         width: 6,
         height: 6,
         decoration: const BoxDecoration(
-          color: Color(0xFF44CC88),
+          color: AppTheme.statusGreen,
           shape: BoxShape.circle,
         ),
       );
@@ -474,8 +503,7 @@ class _PlanViewState extends State<PlanView> {
           value: done / total,
           backgroundColor:
               isSelected ? Colors.white30 : Colors.grey[200],
-          valueColor: const AlwaysStoppedAnimation<Color>(
-              Color(0xFF5599FF)),
+          valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primary),
         ),
       ),
     );
@@ -534,7 +562,7 @@ class _PlanViewState extends State<PlanView> {
       children: [
         // Weekdays Header
         Container(
-          color: Colors.white,
+          color: AppTheme.bgCard,
           padding: const EdgeInsets.symmetric(vertical: 8.0),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -543,7 +571,7 @@ class _PlanViewState extends State<PlanView> {
                       child: Text(
                         day,
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey[800], fontSize: 14),
+                        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14),
                       ),
                     ))
                 .toList(),
@@ -618,7 +646,7 @@ class _PlanViewState extends State<PlanView> {
           rowChildren.add(
             Container(
               height: 120,
-              decoration: BoxDecoration(color: isToday ? Colors.blue[50] : Colors.white),
+              decoration: BoxDecoration(color: isToday ? AppTheme.primaryLight : AppTheme.bgCard),
               padding: const EdgeInsets.all(2),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -628,7 +656,7 @@ class _PlanViewState extends State<PlanView> {
                     style: TextStyle(
                       fontSize: 12, 
                       fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                      color: isToday ? Colors.blue : Colors.black87,
+                      color: isToday ? AppTheme.primary : AppTheme.textPrimary,
                     )
                   ),
                   const SizedBox(height: 4),
@@ -717,7 +745,7 @@ class _PlanViewState extends State<PlanView> {
                                 ),
                               );
                             },
-                            backgroundColor: const Color(0xFFFF9933),
+                            backgroundColor: AppTheme.statusOrange,
                             foregroundColor: Colors.white,
                             icon: Icons.pause_circle_outline,
                             label: '暂停',
@@ -735,7 +763,7 @@ class _PlanViewState extends State<PlanView> {
                                 ),
                               );
                             },
-                            backgroundColor: const Color(0xFF44CC88),
+                            backgroundColor: AppTheme.statusGreen,
                             foregroundColor: Colors.white,
                             icon: Icons.play_circle_outline,
                             label: '恢复',
@@ -752,7 +780,7 @@ class _PlanViewState extends State<PlanView> {
                           onPressed: (context) {
                             _showEditHabitBottomSheet(item, provider);
                           },
-                          backgroundColor: const Color(0xFF5599FF),
+                          backgroundColor: AppTheme.primary,
                           foregroundColor: Colors.white,
                           icon: Icons.edit,
                           label: '编辑',
@@ -800,16 +828,10 @@ class _PlanViewState extends State<PlanView> {
                     ),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: AppTheme.bgCard,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.grey[100]!),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.02),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+                        border: Border.all(color: AppTheme.border),
+                        boxShadow: AppTheme.cardShadow,
                       ),
                       padding: const EdgeInsets.all(16),
                       child: Row(
@@ -848,13 +870,13 @@ class _PlanViewState extends State<PlanView> {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: isPaused
-                                    ? Colors.grey[300]
-                                    : (isCompleted ? const Color(0xFF44CC88) : Colors.transparent),
+                                    ? AppTheme.border
+                                    : (isCompleted ? AppTheme.statusGreen : Colors.transparent),
                                 border: Border.all(
                                   color: isPaused
-                                      ? Colors.grey[400]!
+                                      ? AppTheme.textHint
                                       : (isCompleted
-                                          ? const Color(0xFF44CC88)
+                                          ? AppTheme.statusGreen
                                           : Color(item.colorValue)),
                                   width: 1.5,
                                 ),
@@ -879,8 +901,8 @@ class _PlanViewState extends State<PlanView> {
                                           fontSize: 16,
                                           fontWeight: FontWeight.bold,
                                           color: isPaused
-                                              ? Colors.grey[500]
-                                              : (isCompleted ? Colors.grey[400] : Colors.black87),
+                                              ? AppTheme.textHint
+                                              : (isCompleted ? AppTheme.textSecondary : AppTheme.textPrimary),
                                           decoration: isCompleted || isPaused ? TextDecoration.lineThrough : null,
                                         ),
                                       ),
@@ -904,14 +926,14 @@ class _PlanViewState extends State<PlanView> {
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFF44CC88).withValues(alpha: 0.15),
+                                          color: AppTheme.statusGreen.withValues(alpha: 0.15),
                                           borderRadius: BorderRadius.circular(4),
                                         ),
                                         child: Text(
                                           '今日已打卡',
                                           style: TextStyle(
                                             fontSize: 10,
-                                            color: const Color(0xFF44CC88),
+                                            color: AppTheme.statusGreen,
                                           ),
                                         ),
                                       ),
@@ -975,7 +997,7 @@ class _PlanViewState extends State<PlanView> {
                           : (isCompleted ? Colors.grey[300] : Colors.white),
                       border: isPaused || isCompleted
                           ? null
-                          : Border.all(color: const Color(0xFF5599FF), width: 2),
+                          : Border.all(color: AppTheme.primary, width: 2),
                     ),
                   ),
                 ),

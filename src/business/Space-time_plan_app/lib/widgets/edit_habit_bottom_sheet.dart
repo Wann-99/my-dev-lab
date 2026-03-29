@@ -29,6 +29,9 @@ class _EditHabitBottomSheetState extends State<EditHabitBottomSheet> {
   late int _remindMinute;
   late int _remindSecond;
 
+  late bool _intervalReminderEnabled;
+  late int _intervalReminderMinutes;
+
   @override
   void initState() {
     super.initState();
@@ -67,6 +70,9 @@ class _EditHabitBottomSheetState extends State<EditHabitBottomSheet> {
       _remindMinute = widget.habit.remindTime!.minute;
       _remindSecond = widget.habit.remindTime!.second;
     }
+
+    _intervalReminderEnabled = widget.habit.intervalReminderEnabled;
+    _intervalReminderMinutes = widget.habit.intervalReminderMinutes.clamp(15, 240);
   }
 
   void _handleSave() {
@@ -93,6 +99,12 @@ class _EditHabitBottomSheetState extends State<EditHabitBottomSheet> {
       timeOfDay: newTime,
       remindTime: newRemindTime,
       startDate: _startDate,
+      intervalReminderEnabled: widget.habit.multiTarget
+          ? _intervalReminderEnabled
+          : null,
+      intervalReminderMinutes: widget.habit.multiTarget
+          ? _intervalReminderMinutes
+          : null,
     );
 
     Navigator.pop(context);
@@ -496,6 +508,69 @@ class _EditHabitBottomSheetState extends State<EditHabitBottomSheet> {
                       ),
                     ],
                   ),
+                  if (widget.habit.multiTarget) ...[
+                    const SizedBox(height: 24),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                '间隔提醒',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '每次打卡后按间隔提醒下一次',
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: _intervalReminderEnabled,
+                          onChanged: (v) =>
+                              setState(() => _intervalReminderEnabled = v),
+                          activeThumbColor: const Color(0xFF7C83FD),
+                        ),
+                      ],
+                    ),
+                    if (_intervalReminderEnabled) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Text(
+                            '间隔 $_intervalReminderMinutes 分钟',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          Expanded(
+                            child: Slider(
+                              value: _intervalReminderMinutes.toDouble(),
+                              min: 15,
+                              max: 240,
+                              divisions: 15,
+                              label: '$_intervalReminderMinutes 分钟',
+                              onChanged: (x) => setState(
+                                () => _intervalReminderMinutes = x.round(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
                   const SizedBox(height: 32),
 
                   // Start Date

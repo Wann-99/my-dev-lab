@@ -16,6 +16,9 @@ class HabitPlan {
   int dailyTarget; // 每日目标，如1
   int perComplete; // 单次完成量，如1
   bool multiTarget; // 是否启用“每日打卡目标”
+  /// 多次打卡时：每次打卡后按 [intervalReminderMinutes] 安排下一次提醒（与每日固定提醒可并存）
+  bool intervalReminderEnabled;
+  int intervalReminderMinutes;
   bool autoPopup; // 是否自动弹出打卡心得
   String? checkInNote; // 打卡心得内容
   int status; // 0:进行中（今日未打卡）, 1:今日已打卡, 2:已暂停
@@ -38,6 +41,8 @@ class HabitPlan {
     required this.dailyTarget,
     required this.perComplete,
     this.multiTarget = false,
+    this.intervalReminderEnabled = false,
+    this.intervalReminderMinutes = 60,
     this.autoPopup = true,
     this.checkInNote,
     this.status = 0,
@@ -61,6 +66,8 @@ class HabitPlan {
         'dailyTarget': dailyTarget,
         'perComplete': perComplete,
         'multiTarget': multiTarget,
+        'intervalReminderEnabled': intervalReminderEnabled,
+        'intervalReminderMinutes': intervalReminderMinutes,
         'autoPopup': autoPopup,
         'checkInNote': checkInNote,
         'status': status,
@@ -84,6 +91,10 @@ class HabitPlan {
         dailyTarget: json['dailyTarget'],
         perComplete: json['perComplete'],
         multiTarget: json['multiTarget'] ?? false,
+        intervalReminderEnabled: json['intervalReminderEnabled'] ?? false,
+        intervalReminderMinutes: json['intervalReminderMinutes'] is int
+            ? json['intervalReminderMinutes'] as int
+            : int.tryParse('${json['intervalReminderMinutes']}') ?? 60,
         autoPopup: json['autoPopup'] ?? true,
         checkInNote: json['checkInNote'],
         // 兼容旧数据：无 status 时视为进行中

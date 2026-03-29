@@ -6,6 +6,10 @@ import 'package:space_time_plan_app/models/habit_record.dart';
 import 'package:space_time_plan_app/models/event_item.dart';
 import 'package:space_time_plan_app/services/notification_service.dart';
 
+/// 与每日固定提醒 ID 错开，用于「多次打卡间隔提醒」单次通知
+int habitIntervalNotificationId(int habitId) =>
+    1000000000 + (habitId.abs() % 1000000000);
+
 class HabitProvider extends ChangeNotifier {
   List<HabitPlan> _habits = [];
   List<CheckInLog> _records = [];
@@ -120,6 +124,7 @@ class HabitProvider extends ChangeNotifier {
     _saveHabits();
     _saveRecords();
     NotificationService().cancelNotification(habitId % 2147483647);
+    NotificationService().cancelNotification(habitIntervalNotificationId(habitId));
     notifyListeners();
   }
 
@@ -140,6 +145,8 @@ class HabitProvider extends ChangeNotifier {
     String? timeOfDay,
     DateTime? remindTime,
     DateTime? startDate,
+    bool? intervalReminderEnabled,
+    int? intervalReminderMinutes,
   }) {
     final habitIndex = _habits.indexWhere((h) => h.id == habitId);
     if (habitIndex >= 0) {
@@ -148,13 +155,29 @@ class HabitProvider extends ChangeNotifier {
       if (timeOfDay != null) _habits[habitIndex].timeOfDay = timeOfDay;
       if (remindTime != null) _habits[habitIndex].remindTime = remindTime;
       if (startDate != null) _habits[habitIndex].startDate = startDate;
+      if (intervalReminderEnabled != null) {
+        _habits[habitIndex].intervalReminderEnabled = intervalReminderEnabled;
+      }
+      if (intervalReminderMinutes != null) {
+        _habits[habitIndex].intervalReminderMinutes = intervalReminderMinutes;
+      }
       _saveHabits();
-      _scheduleNotificationForHabit(_habits[habitIndex]);
+      final habit = _habits[habitIndex];
+      _scheduleNotificationForHabit(habit);
+      final today = DateTime(
+          DateTime.now().year, DateTime.now().month, DateTime.now().day);
+      _syncIntervalReminderAfterCheckIn(habit, today);
       notifyListeners();
     }
   }
 
   /// 每日自动恢复检查：将昨日「今日已打卡」且设置了 autoReset 的习惯恢复为「进行中」
+  /// App 从后台恢复时调用，检测是否跨天并执行自动重置
+  void checkNewDay() {
+    _checkAndAutoResetHabits();
+    notifyListeners();
+  }
+
   void _checkAndAutoResetHabits() {
     final today = DateTime.now();
     final todayDate = DateTime(today.year, today.month, today.day);
@@ -174,6 +197,8 @@ class HabitProvider extends ChangeNotifier {
             hasChanges = true;
             // 恢复通知提醒
             _scheduleNotificationForHabit(habit);
+            NotificationService()
+                .cancelNotification(habitIntervalNotificationId(habit.id));
           }
         }
       }
@@ -202,8 +227,13 @@ class HabitProvider extends ChangeNotifier {
     _saveHabits();
     if (status == 0) {
       _scheduleNotificationForHabit(habit);
+      final today = DateTime(
+          DateTime.now().year, DateTime.now().month, DateTime.now().day);
+      _syncIntervalReminderAfterCheckIn(habit, today);
     } else {
       NotificationService().cancelNotification(habit.id % 2147483647);
+      NotificationService()
+          .cancelNotification(habitIntervalNotificationId(habit.id));
     }
     notifyListeners();
   }
@@ -224,6 +254,35 @@ class HabitProvider extends ChangeNotifier {
 
     _saveHabits();
     _saveRecords();
+  }
+
+  /// 仅针对「今日」打卡：每次打卡后按间隔重排下一次；补打历史日不触发。
+  void _syncIntervalReminderAfterCheckIn(HabitPlan habit, DateTime day) {
+    final nid = habitIntervalNotificationId(habit.id);
+    NotificationService().cancelNotification(nid);
+
+    final today = DateTime(
+        DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    if (day != today) return;
+    if (habit.status == 2) return;
+    if (!habit.multiTarget ||
+        !habit.intervalReminderEnabled ||
+        habit.intervalReminderMinutes <= 0) {
+      return;
+    }
+
+    final rec = getHabitRecordForDate(habit.id, day);
+    if (rec == null || rec.value <= 0) return;
+    if (rec.isCompleted) return;
+
+    final when =
+        DateTime.now().add(Duration(minutes: habit.intervalReminderMinutes));
+    NotificationService().scheduleOneTimeNotification(
+      id: nid,
+      title: '习惯打卡提醒',
+      body: '继续完成习惯「${habit.title}」',
+      scheduledLocal: when,
+    );
   }
 
   // Schedule notification helper
@@ -328,6 +387,8 @@ class HabitProvider extends ChangeNotifier {
       _habits[habitIndex].completedDate = normalizedDate;
       // 当日不再提醒（取消通知），次日自动恢复时会重新设置
       NotificationService().cancelNotification(habit.id % 2147483647);
+      NotificationService()
+          .cancelNotification(habitIntervalNotificationId(habit.id));
     } else {
       // 当日未完成（取消打卡），恢复为「进行中」
       _habits[habitIndex].status = 0;
@@ -347,6 +408,7 @@ class HabitProvider extends ChangeNotifier {
 
     _saveHabits();
     _saveRecords();
+    _syncIntervalReminderAfterCheckIn(_habits[habitIndex], normalizedDate);
     notifyListeners();
   }
 
@@ -404,6 +466,48 @@ class HabitProvider extends ChangeNotifier {
   int get inProgressCount => _habits.where((h) => h.status == 0).length;
   int get completedCount => _habits.where((h) => h.status == 1).length;
   int get pausedCount => _habits.where((h) => h.status == 2).length;
+
+  /// 累计打卡总次数
+  int get totalCheckIns => _records.where((r) => r.isCompleted).length;
+
+  /// 已养成习惯数（累计打卡天数 >= 21 天视为已养成）
+  int get formedHabitsCount => _habits.where((h) => h.totalDays >= 21).length;
+
+  /// 最近 30 天打卡完成率（0~100）
+  int get recentCompletionRate {
+    final today = DateTime(
+        DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    int scheduled = 0;
+    int done = 0;
+    for (int i = 0; i < 30; i++) {
+      final date = today.subtract(Duration(days: i));
+      final dayHabits = getHabitsForDate(date);
+      scheduled += dayHabits.length;
+      for (final h in dayHabits) {
+        if (isHabitCompletedOnDate(h.id, date)) done++;
+      }
+    }
+    if (scheduled == 0) return 0;
+    return ((done / scheduled) * 100).round();
+  }
+
+  /// 当前连续打卡天数（至少 1 个习惯完成视为有效打卡日）
+  int get currentStreak {
+    final today = DateTime(
+        DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    int streak = 0;
+    for (int i = 0; i < 365; i++) {
+      final date = today.subtract(Duration(days: i));
+      final dayHabits = getHabitsForDate(date);
+      final hasAny = dayHabits.any((h) => isHabitCompletedOnDate(h.id, date));
+      if (hasAny) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    return streak;
+  }
 
   // Add Event
   void addEvent(EventItem event) {

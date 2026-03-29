@@ -112,6 +112,59 @@ class NotificationService {
     );
   }
 
+  /// 单次定时提醒（不重复）。用于多次打卡的「间隔提醒」链。
+  Future<void> scheduleOneTimeNotification({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledLocal,
+  }) async {
+    final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
+    tz.TZDateTime when = tz.TZDateTime(
+      tz.local,
+      scheduledLocal.year,
+      scheduledLocal.month,
+      scheduledLocal.day,
+      scheduledLocal.hour,
+      scheduledLocal.minute,
+      scheduledLocal.second,
+      scheduledLocal.millisecond,
+    );
+    if (!when.isAfter(now)) return;
+
+    AndroidScheduleMode scheduleMode = AndroidScheduleMode.exactAllowWhileIdle;
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      final hasExactAlarm = await flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.canScheduleExactNotifications();
+      if (hasExactAlarm == false) {
+        scheduleMode = AndroidScheduleMode.inexactAllowWhileIdle;
+      }
+    }
+
+    await flutterLocalNotificationsPlugin.zonedSchedule(
+      id: id,
+      title: title,
+      body: body,
+      scheduledDate: when,
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'habit_channel_id',
+          'Habit Reminders',
+          channelDescription: 'Notifications for habit reminders',
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+          visibility: NotificationVisibility.public,
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+      androidScheduleMode: scheduleMode,
+    );
+  }
+
   // Show immediate notification for testing
   Future<void> showTestNotification() async {
     await flutterLocalNotificationsPlugin.show(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:space_time_plan_app/models/habit.dart';
 import 'package:space_time_plan_app/providers/habit_provider.dart';
+import 'package:space_time_plan_app/widgets/glass_card.dart';
 
 class AddHabitView extends StatefulWidget {
   final VoidCallback onCancel;
@@ -27,7 +28,7 @@ class _AddHabitViewState extends State<AddHabitView> {
   int _timeSecond = 0;
 
   String _iconKey = 'self_improvement';
-  int _colorValue = 0xFF5599FF;
+  int _colorValue = 0xFF4CAF50;
 
   DateTime _startDate = DateTime.now();
   // Reminder variables
@@ -37,6 +38,8 @@ class _AddHabitViewState extends State<AddHabitView> {
   
   // Switches
   bool _multiTarget = false;
+  bool _intervalReminderEnabled = false;
+  int _intervalReminderMinutes = 60;
   bool _autoPopup = true;
   bool _enableReminder = true; // 是否开启每日提醒通知
 
@@ -45,7 +48,7 @@ class _AddHabitViewState extends State<AddHabitView> {
   final Set<int> _monthlyDays = {1}; // 1 = 1st of the month
   
   // Available options for selection
-  final List<int> _colorOptions = [0xFF5599FF, 0xFF44CC88, 0xFFFF9933, 0xFFFF5555, 0xFFAA8855, 0xFF9966CC];
+  final List<int> _colorOptions = [0xFF4CAF50, 0xFF4FC3F7, 0xFFFFB74D, 0xFFEF5350, 0xFF9C27B0, 0xFF795548];
   final List<Map<String, dynamic>> _iconOptions = [
     {'key': 'self_improvement', 'icon': Icons.self_improvement},
     {'key': 'face', 'icon': Icons.face},
@@ -63,22 +66,65 @@ class _AddHabitViewState extends State<AddHabitView> {
   int _planAmount = 1;
   int _perCheckAmount = 1;
 
+  // ── 重复检测辅助 ──────────────────────────────────────────────
+  static bool _intListEquals(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  /// 只比较时/分，忽略日期部分
+  static String? _remindKey(DateTime? dt) =>
+      dt == null ? null : '${dt.hour}:${dt.minute}';
+
+  bool _isExactDuplicate({
+    required String title,
+    required String iconKey,
+    required int colorValue,
+    required String repeatType,
+    required List<int> repeatDays,
+    required String timeOfDay,
+    required DateTime? remindTime,
+    required String unit,
+    required int dailyTarget,
+    required int perComplete,
+    required bool multiTarget,
+    required bool intervalReminderEnabled,
+    required int intervalReminderMinutes,
+    required bool autoPopup,
+  }) {
+    final existingHabits = context.read<HabitProvider>().habits;
+    final titleNorm = title.trim().toLowerCase();
+
+    for (final h in existingHabits) {
+      if (h.title.trim().toLowerCase() != titleNorm) continue;
+      if (h.iconKey != iconKey) continue;
+      if (h.colorValue != colorValue) continue;
+      if (h.repeatType != repeatType) continue;
+      final sortedNew = List<int>.from(repeatDays)..sort();
+      final sortedExist = List<int>.from(h.repeatDays)..sort();
+      if (!_intListEquals(sortedNew, sortedExist)) continue;
+      if (h.timeOfDay != timeOfDay) continue;
+      if (_remindKey(h.remindTime) != _remindKey(remindTime)) continue;
+      if (h.unit != unit) continue;
+      if (h.dailyTarget != dailyTarget) continue;
+      if (h.perComplete != perComplete) continue;
+      if (h.multiTarget != multiTarget) continue;
+      if (h.intervalReminderEnabled != intervalReminderEnabled) continue;
+      if (h.intervalReminderMinutes != intervalReminderMinutes) continue;
+      if (h.autoPopup != autoPopup) continue;
+      return true; // 所有字段完全一致
+    }
+    return false;
+  }
+
   void _handleSave() {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('请输入习惯名称')),
-      );
-      return;
-    }
-    final normalized = name.toLowerCase();
-    final exists = context
-        .read<HabitProvider>()
-        .habits
-        .any((h) => h.title.trim().toLowerCase() == normalized);
-    if (exists) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已存在相同名称的习惯，请修改名称')),
       );
       return;
     }
@@ -96,6 +142,37 @@ class _AddHabitViewState extends State<AddHabitView> {
     final String unit = _multiTarget ? _targetUnit : '次';
     final int dailyTarget = _multiTarget ? _planAmount : 1;
     final int perComplete = _multiTarget ? _perCheckAmount : 1;
+    final String timeOfDay =
+        '${_timeHour.toString().padLeft(2, '0')}:${_timeMinute.toString().padLeft(2, '0')}';
+    final DateTime? remindTime = _enableReminder
+        ? DateTime(_startDate.year, _startDate.month, _startDate.day,
+            _remindHour, _remindMinute, _remindSecond)
+        : null;
+
+    // 全字段完全相同才视为重复
+    if (_isExactDuplicate(
+      title: name,
+      iconKey: _iconKey,
+      colorValue: _colorValue,
+      repeatType: _freqType,
+      repeatDays: finalDays,
+      timeOfDay: timeOfDay,
+      remindTime: remindTime,
+      unit: unit,
+      dailyTarget: dailyTarget,
+      perComplete: perComplete,
+      multiTarget: _multiTarget,
+      intervalReminderEnabled: _multiTarget && _intervalReminderEnabled,
+      intervalReminderMinutes: _multiTarget && _intervalReminderEnabled
+          ? _intervalReminderMinutes
+          : 60,
+      autoPopup: _autoPopup,
+    )) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已存在完全相同的习惯，无需重复创建')),
+      );
+      return;
+    }
 
     final newHabit = HabitPlan(
       id: DateTime.now().millisecondsSinceEpoch,
@@ -104,17 +181,17 @@ class _AddHabitViewState extends State<AddHabitView> {
       colorValue: _colorValue,
       repeatType: _freqType,
       repeatDays: finalDays,
-      timeOfDay: '${_timeHour.toString().padLeft(2, '0')}:${_timeMinute.toString().padLeft(2, '0')}',
-      remindTime: _enableReminder
-          ? DateTime(
-              _startDate.year, _startDate.month, _startDate.day,
-              _remindHour, _remindMinute, _remindSecond)
-          : null,
+      timeOfDay: timeOfDay,
+      remindTime: remindTime,
       startDate: _startDate,
       unit: unit,
       dailyTarget: dailyTarget,
       perComplete: perComplete,
       multiTarget: _multiTarget,
+      intervalReminderEnabled: _multiTarget && _intervalReminderEnabled,
+      intervalReminderMinutes: _multiTarget && _intervalReminderEnabled
+          ? _intervalReminderMinutes
+          : 60,
       autoPopup: _autoPopup,
       // 默认不配置打卡心得；实际打卡时由打卡弹窗录入/编辑。
       checkInNote: null,
@@ -474,32 +551,33 @@ class _AddHabitViewState extends State<AddHabitView> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.white,
+      color: AppTheme.bgMain,
       child: Column(
         children: [
           // App Bar Area
           Container(
-            color: Colors.white,
+            color: AppTheme.bgCard,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                GestureDetector(
-                  onTap: widget.onCancel,
-                  child: const Text('取消', style: TextStyle(color: Colors.black54, fontSize: 16)),
+                TextButton(
+                  onPressed: widget.onCancel,
+                  child: const Text('取消', style: TextStyle(color: AppTheme.textSecondary, fontSize: 16)),
                 ),
-                const Text('添加习惯', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black)),
+                const Text('添加习惯', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.textPrimary)),
                 GestureDetector(
                   onTap: _handleSave,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF5599FF),
+                      color: AppTheme.primary,
                       borderRadius: BorderRadius.circular(18),
+                      boxShadow: AppTheme.primaryShadow(AppTheme.primary),
                     ),
                     child: const Text(
                       '保存',
-                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
@@ -515,15 +593,22 @@ class _AddHabitViewState extends State<AddHabitView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Name Input & Library
-                  Row(
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.bgCard,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: AppTheme.cardShadow,
+                    ),
+                    child: Row(
                     children: [
                       Expanded(
                         child: TextField(
                           controller: _nameController,
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
                           decoration: const InputDecoration(
                             hintText: '习惯名称',
-                            hintStyle: TextStyle(color: Colors.grey, fontWeight: FontWeight.normal),
+                            hintStyle: TextStyle(color: AppTheme.textHint, fontWeight: FontWeight.normal),
                             border: InputBorder.none,
                           ),
                         ),
@@ -531,30 +616,30 @@ class _AddHabitViewState extends State<AddHabitView> {
                       GestureDetector(
                         onTap: _showHabitLibrary,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey[300]!),
-                            borderRadius: BorderRadius.circular(12),
+                            color: AppTheme.primaryLight,
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           child: Column(
                             children: [
-                              Icon(Icons.dns_outlined, color: Colors.orange[300], size: 24),
+                              const Icon(Icons.dns_outlined, color: AppTheme.primary, size: 22),
                               const SizedBox(height: 2),
-                              const Text('习惯库', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                              const Text('习惯库', style: TextStyle(fontSize: 10, color: AppTheme.primary)),
                             ],
                           ),
                         ),
                       ),
                     ],
+                    ),
                   ),
-                  const Divider(),
                   const SizedBox(height: 24),
 
                   // Icon Selection
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('挑选图标和颜色', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
+                      const Text('挑选图标和颜色', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.textPrimary)),
                       Row(
                         children: [
                           GestureDetector(
@@ -576,11 +661,11 @@ class _AddHabitViewState extends State<AddHabitView> {
                   const SizedBox(height: 32),
 
                   // Frequency - 模块一
-                  const Text('想在哪天完成它', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
+                  const Text('想在哪天完成它', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.textPrimary)),
                   const SizedBox(height: 16),
                   Container(
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey[200]!),
+                      color: AppTheme.primaryLight,
                       borderRadius: BorderRadius.circular(30),
                     ),
                     child: Row(
@@ -596,7 +681,7 @@ class _AddHabitViewState extends State<AddHabitView> {
                   const SizedBox(height: 32),
 
                   // Time of Day - 模块二
-                  const Text('想在一天什么时候完成它', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
+                  const Text('想在一天什么时候完成它', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.textPrimary)),
                   const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -607,24 +692,18 @@ class _AddHabitViewState extends State<AddHabitView> {
                           onTap: () => _showCustomTimePicker('hour'),
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              border: Border.all(color: Colors.grey[200]!),
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.02),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Column(
+                              decoration: BoxDecoration(
+                                color: AppTheme.bgCard,
+                                border: Border.all(color: AppTheme.border),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: AppTheme.cardShadow,
+                              ),
+                              child: Column(
                               children: [
                                 Text(_timeHour.toString().padLeft(2, '0'), 
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: Color(0xFF5599FF))),
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: AppTheme.primary)),
                                 const SizedBox(height: 4),
-                                const Text('时', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                const Text('时', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                               ],
                             ),
                           ),
@@ -637,24 +716,18 @@ class _AddHabitViewState extends State<AddHabitView> {
                           onTap: () => _showCustomTimePicker('minute'),
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              border: Border.all(color: Colors.grey[200]!),
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.02),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Column(
+                              decoration: BoxDecoration(
+                                color: AppTheme.bgCard,
+                                border: Border.all(color: AppTheme.border),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: AppTheme.cardShadow,
+                              ),
+                              child: Column(
                               children: [
                                 Text(_timeMinute.toString().padLeft(2, '0'), 
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: Color(0xFF5599FF))),
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: AppTheme.primary)),
                                 const SizedBox(height: 4),
-                                const Text('分', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                const Text('分', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                               ],
                             ),
                           ),
@@ -667,24 +740,18 @@ class _AddHabitViewState extends State<AddHabitView> {
                           onTap: () => _showCustomTimePicker('second'),
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              border: Border.all(color: Colors.grey[200]!),
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.02),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Column(
+                              decoration: BoxDecoration(
+                                color: AppTheme.bgCard,
+                                border: Border.all(color: AppTheme.border),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: AppTheme.cardShadow,
+                              ),
+                              child: Column(
                               children: [
                                 Text(_timeSecond.toString().padLeft(2, '0'), 
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: Color(0xFF5599FF))),
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: AppTheme.primary)),
                                 const SizedBox(height: 4),
-                                const Text('秒', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                const Text('秒', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                               ],
                             ),
                           ),
@@ -698,12 +765,12 @@ class _AddHabitViewState extends State<AddHabitView> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('每日提醒', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
+                      const Text('每日提醒', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.textPrimary)),
                       Switch(
                         value: _enableReminder,
                         onChanged: (val) => setState(() => _enableReminder = val),
-                        activeColor: const Color(0xFF5599FF),
-                        activeTrackColor: const Color(0xFF5599FF).withValues(alpha: 0.5),
+                        activeThumbColor: AppTheme.primary,
+                        activeTrackColor: AppTheme.statusGreen,
                       ),
                     ],
                   ),
@@ -718,16 +785,16 @@ class _AddHabitViewState extends State<AddHabitView> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               decoration: BoxDecoration(
-                                color: Colors.white,
-                                border: Border.all(color: Colors.grey[200]!),
+                                color: AppTheme.bgCard,
+                                border: Border.all(color: AppTheme.border),
                                 borderRadius: BorderRadius.circular(16),
-                                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2))],
+                                boxShadow: AppTheme.cardShadow,
                               ),
                               child: Column(children: [
                                 Text(_remindHour.toString().padLeft(2, '0'),
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: Color(0xFF5599FF))),
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: AppTheme.primary)),
                                 const SizedBox(height: 4),
-                                const Text('时', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                const Text('时', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                               ]),
                             ),
                           ),
@@ -739,16 +806,16 @@ class _AddHabitViewState extends State<AddHabitView> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               decoration: BoxDecoration(
-                                color: Colors.white,
-                                border: Border.all(color: Colors.grey[200]!),
+                                color: AppTheme.bgCard,
+                                border: Border.all(color: AppTheme.border),
                                 borderRadius: BorderRadius.circular(16),
-                                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2))],
+                                boxShadow: AppTheme.cardShadow,
                               ),
                               child: Column(children: [
                                 Text(_remindMinute.toString().padLeft(2, '0'),
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: Color(0xFF5599FF))),
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: AppTheme.primary)),
                                 const SizedBox(height: 4),
-                                const Text('分', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                const Text('分', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                               ]),
                             ),
                           ),
@@ -760,16 +827,16 @@ class _AddHabitViewState extends State<AddHabitView> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               decoration: BoxDecoration(
-                                color: Colors.white,
-                                border: Border.all(color: Colors.grey[200]!),
+                                color: AppTheme.bgCard,
+                                border: Border.all(color: AppTheme.border),
                                 borderRadius: BorderRadius.circular(16),
-                                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2))],
+                                boxShadow: AppTheme.cardShadow,
                               ),
                               child: Column(children: [
                                 Text(_remindSecond.toString().padLeft(2, '0'),
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: Color(0xFF5599FF))),
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: AppTheme.primary)),
                                 const SizedBox(height: 4),
-                                const Text('秒', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                const Text('秒', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                               ]),
                             ),
                           ),
@@ -780,7 +847,7 @@ class _AddHabitViewState extends State<AddHabitView> {
                   const SizedBox(height: 32),
 
                   // Start Date
-                  const Text('从哪天开始', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
+                  const Text('从哪天开始', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.textPrimary)),
                   const SizedBox(height: 16),
                   GestureDetector(
                     onTap: _showDatePicker,
@@ -788,15 +855,16 @@ class _AddHabitViewState extends State<AddHabitView> {
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border.all(color: Colors.grey[200]!),
+                        color: AppTheme.bgCard,
+                        border: Border.all(color: AppTheme.border),
                         borderRadius: BorderRadius.circular(30),
+                        boxShadow: AppTheme.cardShadow,
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text('${_startDate.year}/${_startDate.month.toString().padLeft(2, '0')}/${_startDate.day.toString().padLeft(2, '0')}', 
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.textPrimary)),
                           const SizedBox(width: 8),
                           Text(
                             _startDate.year == DateTime.now().year && _startDate.month == DateTime.now().month && _startDate.day == DateTime.now().day 
@@ -816,9 +884,9 @@ class _AddHabitViewState extends State<AddHabitView> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('每日打卡目标', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          const Text('每日打卡目标', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.textPrimary)),
                           const SizedBox(height: 4),
-                          Text('设置一天多次打卡', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                          const Text('设置一天多次打卡', style: TextStyle(color: AppTheme.textHint, fontSize: 12)),
                         ],
                       ),
                       Switch(
@@ -832,24 +900,91 @@ class _AddHabitViewState extends State<AddHabitView> {
                               _targetUnit = '次';
                               _planAmount = 1;
                               _perCheckAmount = 1;
+                              _intervalReminderEnabled = false;
                             });
                           }
                         },
-                        activeColor: const Color(0xFF5599FF),
-                        activeTrackColor: const Color(0xFF5599FF).withValues(alpha: 0.5),
+                        activeThumbColor: AppTheme.primary,
+                        activeTrackColor: AppTheme.statusGreen,
                       ),
                     ],
                   ),
+                  if (_multiTarget) ...[
+                    const SizedBox(height: 20),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                '间隔提醒',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: AppTheme.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '从本次打卡起每隔一段时间提醒下一次（每打一次卡会重算）',
+                                style: TextStyle(
+                                  color: AppTheme.textHint,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: _intervalReminderEnabled,
+                          onChanged: (v) =>
+                              setState(() => _intervalReminderEnabled = v),
+                          activeThumbColor: AppTheme.primary,
+                          activeTrackColor: AppTheme.statusGreen,
+                        ),
+                      ],
+                    ),
+                    if (_intervalReminderEnabled) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Text(
+                            '间隔 ${_intervalReminderMinutes} 分钟',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                          Expanded(
+                            child: Slider(
+                              value: _intervalReminderMinutes
+                                  .clamp(15, 240)
+                                  .toDouble(),
+                              min: 15,
+                              max: 240,
+                              divisions: 15,
+                              label: '$_intervalReminderMinutes 分钟',
+                              onChanged: (x) => setState(
+                                () => _intervalReminderMinutes = x.round(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
                   const SizedBox(height: 24),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('是否自动弹出打卡心得', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      const Text('是否自动弹出打卡心得', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.textPrimary)),
                       Switch(
                         value: _autoPopup,
                         onChanged: (val) => setState(() => _autoPopup = val),
-                        activeColor: const Color(0xFF5599FF),
-                        activeTrackColor: const Color(0xFF5599FF).withValues(alpha: 0.5),
+                        activeThumbColor: AppTheme.primary,
+                        activeTrackColor: AppTheme.statusGreen,
                       ),
                     ],
                   ),
@@ -869,15 +1004,15 @@ class _AddHabitViewState extends State<AddHabitView> {
         padding: const EdgeInsets.symmetric(vertical: 20),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: Colors.grey[50],
+          color: AppTheme.primaryLight,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey[200]!),
+          border: Border.all(color: AppTheme.border),
         ),
         child: Column(
           children: [
-            Icon(Icons.event_available, color: Colors.green[400], size: 32),
+            const Icon(Icons.event_available, color: AppTheme.primary, size: 32),
             const SizedBox(height: 8),
-            const Text('每天都需要打卡', style: TextStyle(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.bold)),
+            const Text('每天都需要打卡', style: TextStyle(color: AppTheme.primary, fontSize: 14, fontWeight: FontWeight.bold)),
           ],
         ),
       );
@@ -901,18 +1036,18 @@ class _AddHabitViewState extends State<AddHabitView> {
                 }
               });
             },
-            child: Container(
+              child: Container(
               width: 40, height: 40,
               decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF7C83FD) : Colors.transparent,
-                border: isSelected ? null : Border.all(color: Colors.grey[300]!),
+                color: isSelected ? AppTheme.primary : Colors.transparent,
+                border: isSelected ? null : Border.all(color: AppTheme.border),
                 shape: BoxShape.circle,
               ),
               child: Center(
                 child: Text(
                   dayNames[index], 
                   style: TextStyle(
-                    color: isSelected ? Colors.white : Colors.grey[600], 
+                    color: isSelected ? Colors.white : AppTheme.textSecondary, 
                     fontWeight: FontWeight.bold
                   )
                 ),
@@ -925,9 +1060,10 @@ class _AddHabitViewState extends State<AddHabitView> {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppTheme.bgCard,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey[200]!),
+          border: Border.all(color: AppTheme.border),
+          boxShadow: AppTheme.cardShadow,
         ),
         child: Column(
           children: [
@@ -939,8 +1075,8 @@ class _AddHabitViewState extends State<AddHabitView> {
                   child: Center(
                     child: Text(
                       day, 
-                      style: TextStyle(
-                        color: Colors.grey[500], 
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary, 
                         fontSize: 12, 
                         fontWeight: FontWeight.bold
                       )
@@ -978,14 +1114,14 @@ class _AddHabitViewState extends State<AddHabitView> {
                   },
                   child: Container(
                     decoration: BoxDecoration(
-                      color: isSelected ? const Color(0xFF7C83FD) : Colors.transparent,
+                      color: isSelected ? AppTheme.primary : Colors.transparent,
                       shape: BoxShape.circle,
                     ),
                     child: Center(
                       child: Text(
                         '$dayValue', 
                         style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.black87, 
+                          color: isSelected ? Colors.white : AppTheme.textPrimary, 
                           fontSize: 14,
                           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal
                         )
@@ -1009,18 +1145,18 @@ class _AddHabitViewState extends State<AddHabitView> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF7C83FD) : Colors.transparent,
+            color: isSelected ? AppTheme.primary : Colors.transparent,
             borderRadius: BorderRadius.circular(30),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 16, color: isSelected ? Colors.white : Colors.grey[600]),
+              Icon(icon, size: 16, color: isSelected ? Colors.white : AppTheme.textSecondary),
               const SizedBox(width: 4),
               Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.grey[600],
+                  color: isSelected ? Colors.white : AppTheme.textSecondary,
                   fontWeight: FontWeight.bold,
                 ),
               ),
