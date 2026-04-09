@@ -1,241 +1,165 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../l10n/app_localizations.dart';
 import '../models/car_state.dart';
-import 'device_config_page.dart';
+import '../l10n/app_localizations.dart';
 import 'network_mgmt_page.dart';
+import 'about_page.dart';
+import 'advanced_settings_page.dart';
+import 'device_config_page.dart';
 import 'more_settings_page.dart';
-import 'login_page.dart';
+import '../utils/ui_utils.dart';
 
-class MinePage extends StatelessWidget {
+class MinePage extends StatefulWidget {
   const MinePage({super.key});
+
+  @override
+  State<MinePage> createState() => _MinePageState();
+}
+
+class _MinePageState extends State<MinePage> with SingleTickerProviderStateMixin {
+  late AnimationController _blinkController;
+
+  @override
+  void initState() {
+    super.initState();
+    _blinkController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _blinkController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<CarState>();
     final l10n = AppLocalizations.of(context)!;
-
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF64B5F6), // Blue 400
-              Color(0xFFBBDEFB), // Blue 100
-              Color(0xFFF5F6FA), // Light Gray
-            ],
-            stops: [0.0, 0.4, 1.0],
-          ),
-        ),
-        child: SafeArea(
-          bottom: false,
-          child: CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              SliverAppBar.large(
-                title: Text(
-                  l10n.mine, 
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold, 
-                    letterSpacing: 0.5, 
-                    color: Colors.white,
-                    shadows: [Shadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
-                  )
-                ),
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                stretch: true,
-                pinned: true,
-              ),
-              SliverToBoxAdapter(
-                child: _buildUserHeader(context, state, l10n),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 100), // Extra bottom padding
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    _buildMenuSection(
-                      context,
-                      [
-                        _buildMenuItem(
-                          context, 
-                          Icons.settings_suggest_rounded, 
-                          l10n.deviceSettings, 
-                          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DeviceConfigPage())),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    _buildMenuSection(
-                      context,
-                      [
-                        _buildMenuItem(
-                          context, 
-                          Icons.wifi_rounded, 
-                          l10n.networkConfig, 
-                          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NetworkMgmtPage())),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    _buildMenuSection(
-                      context,
-                      [
-                        _buildMenuItem(
-                          context, 
-                          Icons.more_horiz_rounded, 
-                          l10n.moreSettings,
-                          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MoreSettingsPage())),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 40),
-                    _buildLogoutButton(context, l10n),
-                    const SizedBox(height: 40),
-                  ]),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMenuSection(BuildContext context, List<Widget> items) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.85), // Glass effect
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF29B6F6).withValues(alpha: 0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: items,
-      ),
-    );
-  }
-
-  Widget _buildLogoutButton(BuildContext context, AppLocalizations l10n) {
-    return SizedBox(
-      width: double.infinity,
-      child: TextButton.icon(
-        onPressed: () {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const LoginPage()),
-            (route) => false,
-          );
-        },
-        icon: const Icon(Icons.logout_rounded, color: Color(0xFFFF5252), size: 22),
-        label: Text(
-          l10n.logout,
-          style: const TextStyle(
-            color: Color(0xFFFF5252),
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1,
-          ),
-        ),
-        style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          backgroundColor: const Color(0xFFFFEBEE).withValues(alpha: 0.8), // Slight transparency
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUserHeader(BuildContext context, CarState state, AppLocalizations l10n) {
-    final primaryColor = Theme.of(context).colorScheme.primary;
     
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.85), // Glass effect
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: primaryColor.withValues(alpha: 0.15),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F6FA),
+      body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Stack(
           children: [
-            Hero(
-              tag: 'avatar',
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: primaryColor.withValues(alpha: 0.2), width: 2),
-                ),
-                child: CircleAvatar(
-                  radius: 32, 
-                  backgroundColor: primaryColor.withValues(alpha: 0.1), 
-                  child: Icon(Icons.person_rounded, size: 40, color: primaryColor)
-                ),
-              ),
-            ),
-            const SizedBox(width: 20),
-            Expanded(
+            // 1. Background Area
+            _buildTopArea(state),
+            
+            // 2. Content Area
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 140, 16, 40),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    l10n.admin, 
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF333333), letterSpacing: 0.5)
-                  ),
-                  const SizedBox(height: 6),
-                  state.isBound 
-                    ? Align(
-                        alignment: Alignment.centerLeft,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: primaryColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.link_rounded, size: 14, color: primaryColor),
-                              const SizedBox(width: 6),
-                              Flexible(
-                                child: Text(
-                                  state.deviceId,
-                                  style: TextStyle(
-                                    color: primaryColor,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    : Text(
-                        l10n.unbound,
-                        style: const TextStyle(
-                          color: Color(0xFF999999),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                  _buildGroup(
+                    title: '网络与连接',
+                    children: [
+                      _buildListItem(
+                        title: '网络设置', 
+                        trailingText: state.isConnected ? state.wifiSsid : '未连接',
+                        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NetworkMgmtPage())),
+                      ),
+                      _buildDivider(),
+                      _buildListItem(
+                        title: 'MQTT 服务器配置',
+                        trailingText: state.relayUrl.isEmpty ? '未配置' : state.relayUrl,
+                        onTap: () => _showRelayUrlDialog(context, state),
+                      ),
+                      _buildDivider(),
+                      _buildListItem(
+                        title: '摄像头流地址',
+                        trailingText: state.camStreamUrl.isEmpty ? '自动' : state.camStreamUrl,
+                        onTap: () => _showCamStreamUrlDialog(context, state),
+                      ),
+                      _buildDivider(),
+                      _buildListItem(
+                        title: '远程控制模式',
+                        trailingWidget: Switch(
+                          value: state.isRemoteMode,
+                          onChanged: (val) {
+                            if (val && state.relayUrl.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请先设置 MQTT 服务器地址')));
+                              _showRelayUrlDialog(context, state);
+                              return;
+                            }
+                            // Send set_relay BEFORE switching mode,
+                            // so the command goes out over the existing connection.
+                            if (val && state.isConnected && !state.isRemoteMode) {
+                              state.sendCommand(jsonEncode({
+                                "cmd": "set_relay",
+                                "url": state.relayUrl,
+                                "id": state.activeDevice?.id ?? "unknown"
+                              }));
+                            }
+                            state.saveAllSettings(newIsRemoteMode: val);
+                          },
+                          activeTrackColor: const Color(0xFF29B6F6),
+                          activeThumbColor: Colors.white,
                         ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  _buildGroup(
+                    title: '高级设置',
+                    children: [
+                      _buildListItem(
+                        title: '全局急停按钮显示',
+                        trailingWidget: Switch(
+                          value: state.showEmergencyStop,
+                          onChanged: (val) {
+                            state.saveAllSettings(newShowEmergencyStop: val);
+                          },
+                          activeTrackColor: const Color(0xFF29B6F6),
+                          activeThumbColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  _buildGroup(
+                    title: '更多设置',
+                    children: [
+                      _buildListItem(
+                        title: '多语言切换', 
+                        trailingText: state.locale.languageCode == 'zh' ? '简体中文' : 'English',
+                        onTap: () => _showLanguageBottomSheet(context, state, l10n),
+                      ),
+                      _buildDivider(),
+                      _buildListItem(
+                        title: '系统校准测试', 
+                        trailingText: '电压/舵机',
+                        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AdvancedSettingsPage())),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  _buildGroup(
+                    title: '关于 RoboCar-A',
+                    children: [
+                      _buildListItem(
+                        title: '功能介绍',
+                        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AboutPage())),
+                      ),
+                      _buildDivider(),
+                      _buildListItem(
+                        title: '检查更新 (App)', 
+                        trailingText: state.appUpdateAvailable ? '发现新版本' : 'v${state.currentAppVersion}',
+                        trailingWidget: state.isCheckingUpdates 
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
+                          : null,
+                        onTap: () => _handleAppUpdateCheck(context, state),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -245,32 +169,346 @@ class MinePage extends StatelessWidget {
     );
   }
 
-  Widget _buildMenuItem(BuildContext context, IconData icon, String title, VoidCallback onTap, {Color? color}) {
-    final primaryColor = Theme.of(context).colorScheme.primary;
-    final itemColor = color ?? primaryColor;
-    
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      leading: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: itemColor.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(14),
+  Widget _buildTopArea(CarState state) {
+    return Container(
+      height: 220,
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: Color(0xFF29B6F6),
+        gradient: RadialGradient(
+          center: Alignment.topRight,
+          radius: 1.5,
+          colors: [
+            Color(0xFF64B5F6),
+            Color(0xFF29B6F6),
+            Color(0xFF0288D1),
+          ],
         ),
-        child: Icon(icon, color: itemColor, size: 22),
       ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -50,
+            top: -50,
+            child: Container(
+              width: 150,
+              height: 150,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.1),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'RoboCar-A',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      AnimatedBuilder(
+                        animation: _blinkController,
+                        builder: (context, child) {
+                          return Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: const Color(0xFF4ADE80).withOpacity(0.4 + (_blinkController.value * 0.6)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF4ADE80).withOpacity(_blinkController.value * 0.8),
+                                  blurRadius: 6,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 10),
+                      const Text(
+                        '系统运行正常',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGroup({required String title, required List<Widget> children}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 12, bottom: 8),
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF999999),
+            ),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            children: children,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildListItem({required String title, String? trailingText, Widget? trailingWidget, bool isDestructive = false, VoidCallback? onTap}) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
       title: Text(
-        title, 
-        style: const TextStyle(
-          color: Color(0xFF333333), 
-          fontSize: 16, 
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.5,
-        )
+        title,
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+          color: isDestructive ? const Color(0xFFFF5252) : const Color(0xFF333333),
+        ),
       ),
-      trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFFCCCCCC), size: 22),
+      trailing: trailingWidget ?? (trailingText != null
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  trailingText,
+                  style: const TextStyle(fontSize: 14, color: Color(0xFF999999)),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.chevron_right_rounded, color: Color(0xFFCCCCCC), size: 20),
+              ],
+            )
+          : const Icon(Icons.chevron_right_rounded, color: Color(0xFFCCCCCC), size: 20)),
       onTap: onTap,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+    );
+  }
+
+  Widget _buildDivider() {
+    return const Divider(height: 1, indent: 20, endIndent: 20, color: Color(0xFFF0F0F0));
+  }
+
+  void _showRelayUrlDialog(BuildContext context, CarState state) {
+    final controller = TextEditingController(text: state.relayUrl);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('设置 MQTT 服务器'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('请输入 MQTT 服务器地址（如: 192.168.1.100 或 mqtt.example.com）', style: TextStyle(fontSize: 13, color: Colors.grey)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                hintText: "服务器地址",
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              autofocus: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+          ElevatedButton(
+            onPressed: () {
+              state.setRelayUrl(controller.text.trim());
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF29B6F6)),
+            child: const Text('保存', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCamStreamUrlDialog(BuildContext context, CarState state) {
+    final controller = TextEditingController(text: state.camStreamUrl);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('摄像头流地址'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '留空则自动选择（本地模式直连 camIP:81，远程模式使用 MQTT服务器IP:8081）\n\n'
+              '若需 FRP 公网访问，填写完整 URL，例如：\n'
+              'http://公网IP:8081/stream',
+              style: TextStyle(fontSize: 12, color: Colors.grey, height: 1.5),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                hintText: "http://公网IP:8081/stream",
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              autofocus: true,
+              keyboardType: TextInputType.url,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              state.setCamStreamUrl('');
+              Navigator.pop(context);
+            },
+            child: const Text('清除', style: TextStyle(color: Colors.red)),
+          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+          ElevatedButton(
+            onPressed: () {
+              state.setCamStreamUrl(controller.text.trim());
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF29B6F6)),
+            child: const Text('保存', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleAppUpdateCheck(BuildContext context, CarState state) async {
+    if (state.isCheckingUpdates) return;
+    
+    await state.checkUpdates();
+    
+    if (!mounted) return;
+    
+    if (state.appUpdateAvailable) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Consumer<CarState>(
+          builder: (context, state, child) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: const Text('发现新版本'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('版本号: v${state.latestAppVersion}', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF29B6F6))),
+                const SizedBox(height: 12),
+                if (state.appChangelog.isNotEmpty) ...[
+                  const Text('更新内容：', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text(state.appChangelog, style: const TextStyle(fontSize: 14, color: Color(0xFF475569))),
+                  const SizedBox(height: 16),
+                ],
+                if (state.otaStatus.isNotEmpty) ...[
+                  Text(state.otaStatus, style: const TextStyle(fontSize: 13, color: Color(0xFF29B6F6))),
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: state.otaProgress,
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF29B6F6)),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              if (state.otaProgress <= 0)
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('以后再说')),
+              if (state.otaProgress <= 0)
+                ElevatedButton(
+                  onPressed: () => state.downloadAndInstallApp(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF29B6F6),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('立即更新'),
+                ),
+              if (state.otaProgress > 0 && state.otaProgress < 1.0)
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                ),
+              if (state.otaProgress >= 1.0)
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('关闭')),
+            ],
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('当前已是最新版本')));
+    }
+  }
+
+  void _showLanguageBottomSheet(BuildContext context, CarState state, AppLocalizations l10n) {
+    UIUtils.showAppBottomSheet(
+      context: context,
+      builder: (context) => Container(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(l10n.language, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 24),
+            ListTile(
+              title: const Text("简体中文"),
+              trailing: state.locale.languageCode == 'zh' ? const Icon(Icons.check, color: Color(0xFF29B6F6)) : null,
+              onTap: () {
+                state.setLocale(const Locale('zh'));
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: const Text("English"),
+              trailing: state.locale.languageCode == 'en' ? const Icon(Icons.check, color: Color(0xFF29B6F6)) : null,
+              onTap: () {
+                state.setLocale(const Locale('en'));
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

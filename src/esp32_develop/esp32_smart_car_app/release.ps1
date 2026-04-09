@@ -36,56 +36,38 @@ Write-Host ">>> 正在计算 SHA256..." -ForegroundColor Cyan
 $hash = (Get-FileHash $apkPath -Algorithm SHA256).Hash.ToLower()
 Write-Host "SHA256: $hash" -ForegroundColor Gray
 
-# 4. 准备 version.json 内容
-Write-Host ">>> 准备更新 version.json 建议内容..." -ForegroundColor Cyan
-$jsonTemplate = @"
-{
-  "app": {
-    "version": "$Version",
-    "build_number": $newBuildNumber,
-    "url": "https://github.com/Wann-99/esp32_smart_car_updates/releases/latest/download/app-release.apk",
-    "changelog": "$Changelog",
-    "sha256": "$hash",
-    "min_version": "1.0.0"
-  }
-}
-"@
-
-# 自动更新本地的 version.json (如果存在)
+# 4. 更新 version.json (保持固件信息不变)
+Write-Host ">>> 正在更新 version.json..." -ForegroundColor Cyan
 $localJsonPath = "./ota_updates/version.json"
+
 if (Test-Path $localJsonPath) {
-    Set-Content $localJsonPath $jsonTemplate
+    # 读取现有 JSON
+    $jsonObj = Get-Content $localJsonPath -Raw | ConvertFrom-Json
+    
+    # 更新 App 部分
+    if (-not $jsonObj.app) { $jsonObj | Add-Member -MemberType NoteProperty -Name "app" -Value @{} }
+    $jsonObj.app.version = $Version
+    $jsonObj.app.build_number = $newBuildNumber
+    $jsonObj.app.url = "https://github.com/Wann-99/esp32_smart_car_updates/releases/latest/download/app-release.apk"
+    $jsonObj.app.changelog = $Changelog
+    $jsonObj.app.sha256 = $hash
+    $jsonObj.app.min_version = "1.0.0"
+
+    # 写回文件 (使用 4 层深度以确保嵌套对象正确序列化)
+    $jsonObj | ConvertTo-Json -Depth 4 | Set-Content $localJsonPath
     Write-Host ">>> 离线元数据已同步！($localJsonPath)" -ForegroundColor Green
 
-    # 5. 自动执行 Git 提交与推送
-    Write-Host ">>> 正在推送更新到 GitHub..." -ForegroundColor Cyan
-    try {
-        # 记录当前目录，进入 ota_updates 目录执行 git 操作
-        # 这样即便 ota_updates 是一个独立的子模块或仓库也能正常工作
-        $currentDir = Get-Location
-        cd ota_updates
-        
-        git add version.json
-        git commit -m "release: v$Version (build $newBuildNumber)"
-        
-        # 尝试推送并自动设置上游分支（解决首次推送失败问题）
-        $pushResult = git push -u origin main 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            throw "Git Push Failed: $pushResult"
-        }
-        
-        cd $currentDir
-        Write-Host ">>> GitHub 元数据已成功推送！" -ForegroundColor Green
-    } catch {
-        cd $currentDir
-        Write-Host "!!! Git 推送失败: $($_.Exception.Message)" -ForegroundColor Red
-        Write-Host "提示: 请确保已在 ota_updates 目录运行过 git remote add origin <URL>" -ForegroundColor Yellow
-    }
+    Write-Host "`n>>> [提示] 请手动执行 Git 操作以发布元数据：" -ForegroundColor Yellow
+    Write-Host "    cd ota_updates"
+    Write-Host "    git add version.json"
+    Write-Host "    git commit -m `"release: v$Version (build $newBuildNumber)`""
+    Write-Host "    git push"
 } else {
     Write-Host "!!! 未找到 ./ota_updates/version.json，请确保该文件夹和文件存在。" -ForegroundColor Yellow
 }
 
 Write-Host "`n====================================================" -ForegroundColor Magenta
-Write-Host "流程结束！请手动执行最后一歨：" -ForegroundColor Magenta
-Write-Host "将 $apkPath 上传到 GitHub Release"
+Write-Host "流程结束！请手动执行以下步骤完成发布：" -ForegroundColor Magenta
+Write-Host "1. 将 $apkPath 上传到 GitHub Release"
+Write-Host "2. (见上方提示) 推送 ota_updates 目录下的 version.json"
 Write-Host "====================================================`n"

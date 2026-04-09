@@ -11,7 +11,7 @@
 
 #define TRIG_PIN 9
 #define ECHO_PIN 10
-#define TIMEOUT_US 30000 // 30ms timeout (approx 5m)
+#define TIMEOUT_US 35000 // 35ms timeout (approx 6m)
 #define SAMPLE_COUNT 5   // Number of samples for filtering
 
 void ultrasonic_init(void)
@@ -89,7 +89,7 @@ float ultrasonic_get_distance_cm(void)
 
     for (int i = 0; i < SAMPLE_COUNT; i++) {
         float d = measure_raw_distance();
-        if (d > 0 && d < 400) { // Valid range 2cm - 400cm
+        if (d >= 2.0f && d <= 600.0f) { // Valid range 2cm - 600cm
             samples[valid_samples++] = d;
         }
         // Small delay between samples to avoid interference from echoes

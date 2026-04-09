@@ -1,9 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../l10n/app_localizations.dart';
 import '../models/car_state.dart';
-import 'dart:io';
-import 'package:file_picker/file_picker.dart';
+import '../l10n/app_localizations.dart';
 
 class AdvancedSettingsPage extends StatefulWidget {
   const AdvancedSettingsPage({super.key});
@@ -13,414 +12,259 @@ class AdvancedSettingsPage extends StatefulWidget {
 }
 
 class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
-  void _handleFactoryReset() {
-    final state = context.read<CarState>();
-    final l10n = AppLocalizations.of(context)!;
-    if (!state.isConnected) {
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(l10n.pleaseConnectFirst), 
-            backgroundColor: Colors.orangeAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      return;
-    }
+  int _servoChannel = 0;
+  double _servoAngle = 90.0;
+  late TextEditingController _voltageController;
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Text(l10n.factoryReset, style: const TextStyle(color: Color(0xFF333333))),
-        content: Text(l10n.factoryResetConfirm, style: const TextStyle(color: Color(0xFF666666))),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context), 
-            child: Text(l10n.cancel, style: const TextStyle(color: Color(0xFF999999)))
-          ),
-          TextButton(
-            onPressed: () {
-              final state = context.read<CarState>();
-              final navigator = Navigator.of(context);
-                
-                state.factoryReset().then((_) {
-                  navigator.pop(); // Close confirmation dialog
-                  
-                  if (!context.mounted) return;
-                  showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (context) => AlertDialog(
-                      backgroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                      title: Row(
-                        children: [
-                          const Icon(Icons.info_outline, color: Colors.orangeAccent),
-                          const SizedBox(width: 12),
-                          Text(l10n.factoryResetTitle, style: const TextStyle(color: Color(0xFF333333))),
-                        ],
-                      ),
-                      content: Text(l10n.factoryResetSuccess, style: const TextStyle(color: Color(0xFF666666))),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: Text(l10n.gotIt, style: TextStyle(color: Theme.of(context).colorScheme.primary)),
-                        ),
-                      ],
-                    ),
-                  );
-                });
-            },
-            child: Text(l10n.confirm, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
+  @override
+  void initState() {
+    super.initState();
+    _voltageController = TextEditingController();
   }
 
-  void _handleReboot() {
-    final state = context.read<CarState>();
-    final l10n = AppLocalizations.of(context)!;
-    if (!state.isConnected) {
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(l10n.pleaseConnectFirst), 
-            backgroundColor: Colors.orangeAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      return;
-    }
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Text(l10n.rebootDevice, style: const TextStyle(color: Color(0xFF333333))),
-        content: Text(l10n.rebootConfirm, style: const TextStyle(color: Color(0xFF666666))),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context), 
-            child: Text(l10n.cancel, style: const TextStyle(color: Color(0xFF999999)))
-          ),
-          TextButton(
-            onPressed: () {
-              context.read<CarState>().rebootDevice();
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context)
-                ..clearSnackBars()
-                ..showSnackBar(
-                  SnackBar(
-                    content: Text(l10n.rebooting), 
-                    backgroundColor: Colors.blueAccent,
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-            },
-            child: Text(l10n.confirm, style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _handleDeviceUpdate() {
-    final state = context.read<CarState>();
-    final l10n = AppLocalizations.of(context)!;
-    if (!state.isConnected) {
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(l10n.pleaseConnectFirst), 
-            backgroundColor: Colors.orangeAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      return;
-    }
-    if (!state.hasFirmwareUpdate) {
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(
-          SnackBar(content: Text(l10n.latestVersion), behavior: SnackBarBehavior.floating),
-        );
-      return;
-    }
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Text(l10n.newFirmwareFound(state.latestFirmwareVersion), style: const TextStyle(color: Color(0xFF333333))),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(l10n.updateContent, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF333333))),
-            const SizedBox(height: 12),
-            Text(state.firmwareUpdateLog, style: const TextStyle(color: Color(0xFF666666))),
-            const SizedBox(height: 20),
-            Text(l10n.updateNote, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context), 
-            child: Text(l10n.later, style: const TextStyle(color: Color(0xFF999999)))
-          ),
-          TextButton(
-            onPressed: () {
-              state.startDeviceOTA();
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context)
-                ..clearSnackBars()
-                ..showSnackBar(
-                  SnackBar(
-                    content: Text(l10n.otaCommandSent), 
-                    backgroundColor: Colors.blueAccent,
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-            },
-            child: Text(l10n.downloadNow, style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _handleLocalOTA() async {
-    final state = context.read<CarState>();
-    final l10n = AppLocalizations.of(context)!;
-    if (!state.isConnected) {
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(l10n.pleaseConnectFirst), 
-            backgroundColor: Colors.orangeAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      return;
-    }
-
-    final messenger = ScaffoldMessenger.of(context);
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['bin'],
-    );
-
-    if (result != null && result.files.single.path != null) {
-      File file = File(result.files.single.path!);
-      if (!mounted) return;
-      
-      showDialog(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: Text(l10n.firmwareUpdateLocal, style: const TextStyle(color: Color(0xFF333333))),
-          content: Text(l10n.localOtaConfirm(result.files.single.name, (file.lengthSync() / 1024 / 1024).toStringAsFixed(2)), style: const TextStyle(color: Color(0xFF666666))),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext), 
-              child: Text(l10n.cancel, style: const TextStyle(color: Color(0xFF999999)))
-            ),
-            TextButton(
-              onPressed: () {
-                state.startLocalOTA(file);
-                Navigator.pop(dialogContext);
-                messenger
-                  ..clearSnackBars()
-                  ..showSnackBar(
-                    SnackBar(
-                      content: Text(l10n.localOtaStarted), 
-                      backgroundColor: Colors.blueAccent,
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-              },
-              child: Text(l10n.confirm, style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      );
-    }
+  @override
+  void dispose() {
+    _voltageController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<CarState>();
     final l10n = AppLocalizations.of(context)!;
+    
+    if (_voltageController.text.isEmpty || double.tryParse(_voltageController.text) != state.voltageMultiplier) {
+       _voltageController.text = state.voltageMultiplier.toStringAsFixed(2);
+    }
 
     return Scaffold(
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          SliverAppBar.large(
-            title: Text(
-              l10n.advancedSettings, 
-              style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5, color: Color(0xFF333333))
-            ),
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            stretch: true,
-            pinned: true,
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                _buildSection("Firmware Updates", [
-                  _buildSettingRow(
-                    "Main Controller", 
-                    state.currentFirmwareVersion, 
-                    onTap: _handleDeviceUpdate,
-                    badge: state.hasFirmwareUpdate ? "NEW" : null,
-                  ),
-                  _buildSettingRow(
-                    "Vision Controller", 
-                    state.currentCamFirmwareVersion, 
-                    onTap: () {},
-                    badge: state.hasCamFirmwareUpdate ? "NEW" : null,
-                  ),
-                  _buildSettingRow(
-                    l10n.firmwareUpdateLocal, 
-                    state.isLocalServerRunning ? l10n.running : l10n.selectFile, 
-                    onTap: _handleLocalOTA,
-                    action: state.isLocalServerRunning 
-                      ? IconButton(
-                          icon: const Icon(Icons.stop_circle_rounded, color: Colors.redAccent),
-                          onPressed: () => state.stopLocalServer(),
-                        )
-                      : null,
-                  ),
-                ]),
+      appBar: AppBar(
+        title: Text(l10n.advancedSettings),
+        elevation: 0,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSection(
+              title: '舵机校准 (Servo)',
+              icon: Icons.settings_input_component_rounded,
+              children: [
+                const Text(
+                  '调整下方滑块以测试舵机角度。校准完成后，系统将自动保存中位偏置。',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.5),
+                ),
                 const SizedBox(height: 24),
-                _buildSection("Device Control", [
-                  _buildSettingRow(l10n.factoryReset, "", onTap: _handleFactoryReset, color: Colors.redAccent),
-                  _buildSettingRow(l10n.rebootDevice, "", onTap: _handleReboot),
-                  _buildSettingRow(l10n.exportLogs, ""),
-                ]),
-                const SizedBox(height: 24),
-                _buildSection("Interface", [
-                  _buildSwitchRow(
-                    "Emergency Stop Button", 
-                    "Show global stop button", 
-                    state.showEmergencyStop, 
-                    (v) => state.saveAllSettings(newShowEmergencyStop: v),
-                  ),
-                ]),
-                const SizedBox(height: 30),
-              ]),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('选择通道', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                    DropdownButton<int>(
+                      value: _servoChannel,
+                      items: List.generate(16, (i) => DropdownMenuItem(value: i, child: Text('通道 $i'))),
+                      onChanged: (val) {
+                        if (val != null) setState(() => _servoChannel = val);
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('当前角度', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                    Text('${_servoAngle.toInt()}°', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF29B6F6))),
+                  ],
+                ),
+                Slider(
+                  value: _servoAngle,
+                  min: 0,
+                  max: 180,
+                  divisions: 180,
+                  activeColor: const Color(0xFF29B6F6),
+                  onChanged: (val) {
+                    setState(() => _servoAngle = val);
+                    state.sendCommand(jsonEncode({
+                      "cmd": "servo",
+                      "channel": _servoChannel,
+                      "angle": val.toInt()
+                    }));
+                  },
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildQuickButton('0°', () => _setAngle(state, 0)),
+                    const SizedBox(width: 12),
+                    _buildQuickButton('90° (居中)', () => _setAngle(state, 90)),
+                    const SizedBox(width: 12),
+                    _buildQuickButton('180°', () => _setAngle(state, 180)),
+                  ],
+                ),
+              ],
             ),
-          ),
-        ],
+            const SizedBox(height: 32),
+            
+            _buildSection(
+              title: '系统校准 (Calibration)',
+              icon: Icons.compass_calibration_rounded,
+              children: [
+                const Text(
+                  '电压校准：如果您发现 App 显示电压与万用表测量值不符，请输入实测电压，系统将自动计算校准系数。',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.5),
+                ),
+                const SizedBox(height: 24),
+                
+                // Method 1: Manual Multiplier
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text('校准系数', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                    ),
+                    SizedBox(
+                      width: 100,
+                      child: TextField(
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        textAlign: TextAlign.center,
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          suffixText: 'x',
+                        ),
+                        controller: _voltageController,
+                        onSubmitted: (val) {
+                          final multiplier = double.tryParse(val);
+                          if (multiplier != null && multiplier > 0) {
+                            state.setVoltageMultiplier(multiplier);
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                
+                // Method 2: Actual Voltage Input
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text('实测电压', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                    ),
+                    SizedBox(
+                      width: 100,
+                      child: TextField(
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        textAlign: TextAlign.center,
+                        decoration: InputDecoration(
+                          hintText: '0.00',
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          suffixText: 'V',
+                        ),
+                        onSubmitted: (val) {
+                          final actual = double.tryParse(val);
+                          if (actual != null && actual > 0) {
+                            state.setVoltageByActual(actual);
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('电压校准成功')));
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildStatusRow('硬件原始电压', '${state.rawBatteryVoltage.toStringAsFixed(2)} V', const Color(0xFF64748B)),
+                      const Divider(height: 16),
+                      _buildStatusRow('App 显示电压', '${state.batteryVoltage.toStringAsFixed(2)} V', const Color(0xFF29B6F6)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildSection(String title, List<Widget> children) {
+  void _setAngle(CarState state, double angle) {
+    setState(() => _servoAngle = angle);
+    state.sendCommand(jsonEncode({
+      "cmd": "servo",
+      "channel": _servoChannel,
+      "angle": angle.toInt()
+    }));
+  }
+
+  Widget _buildSection({required String title, required IconData icon, required List<Widget> children}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 8, bottom: 12),
-          child: Text(
-            title, 
-            style: const TextStyle(
-              color: Color(0xFF999999), 
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.2,
-            )
-          ),
+        Row(
+          children: [
+            Icon(icon, color: const Color(0xFF29B6F6), size: 20),
+            const SizedBox(width: 10),
+            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+          ],
         ),
+        const SizedBox(height: 20),
         Container(
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFE0E0E0).withValues(alpha: 0.5),
+                color: Colors.black.withOpacity(0.03),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
             ],
           ),
-          child: Column(children: children),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: children,
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildSettingRow(String label, String value, {Widget? action, VoidCallback? onTap, String? badge, Color? color}) {
-    return ListTile(
-      onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      title: Row(
+  Widget _buildStatusRow(String label, String value, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label, 
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color ?? const Color(0xFF333333))
-          ),
-          if (badge != null) ...[
-            const SizedBox(width: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.redAccent,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                badge,
-                style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
+          Text(label, style: const TextStyle(color: Color(0xFF64748B), fontSize: 15)),
+          Text(value, style: TextStyle(color: color, fontSize: 15, fontWeight: FontWeight.bold)),
         ],
       ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (value.isNotEmpty) 
-            Text(value, style: const TextStyle(color: Color(0xFF999999), fontSize: 13)),
-          if (action != null) ...[const SizedBox(width: 8), action],
-          const SizedBox(width: 4),
-          const Icon(Icons.chevron_right_rounded, color: Color(0xFFCCCCCC), size: 20),
-        ],
-      ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
     );
   }
 
-  Widget _buildSwitchRow(String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
-    final primaryColor = Theme.of(context).colorScheme.primary;
-    
-    return SwitchListTile(
-      value: value,
-      onChanged: onChanged,
-      title: Text(
-        title, 
-        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF333333))
+  Widget _buildQuickButton(String label, VoidCallback onTap) {
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: const Color(0xFF29B6F6),
+        side: const BorderSide(color: Color(0xFFE2E8F0)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 2),
-        child: Text(subtitle, style: const TextStyle(color: Color(0xFF999999), fontSize: 11)),
-      ),
-      activeThumbColor: Colors.white,
-      activeTrackColor: primaryColor,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Text(label),
     );
   }
 }

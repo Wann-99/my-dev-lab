@@ -1,199 +1,218 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_joystick/flutter_joystick.dart';
 import 'package:flutter_mjpeg/flutter_mjpeg.dart';
-import '../l10n/app_localizations.dart';
+import 'package:provider/provider.dart';
 import '../models/car_state.dart';
-import 'control_page.dart';
+import '../l10n/app_localizations.dart';
 
-class ControlEntryPage extends StatelessWidget {
+/// Fullscreen landscape MANUAL control page.
+/// Navigated to from ControlPage → 手动 tab → 开始控制.
+/// Contains ONLY joystick controls; no auto/AI mode switching.
+class ControlEntryPage extends StatefulWidget {
   const ControlEntryPage({super.key});
+
+  @override
+  State<ControlEntryPage> createState() => _ControlEntryPageState();
+}
+
+class _ControlEntryPageState extends State<ControlEntryPage> {
+  bool _isLightOn = false;
+  bool _isHornOn  = false;
+
+  // Servo: Pan 0–180°, Tilt 0–70° (hardware default 35°)
+  double _servoPan  = 90.0;
+  double _servoTilt = 35.0;
+  Timer? _servoTimer;
+  Timer? _distanceTimer;
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+
+  @override
+  void initState() {
+    super.initState();
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final state = context.read<CarState>();
+      // Send initial servo positions to hardware
+      state.sendCommand(jsonEncode({"cmd": "servo", "channel": 0, "angle": _servoPan.toInt()}));
+      state.sendCommand(jsonEncode({"cmd": "servo", "channel": 1, "angle": _servoTilt.toInt()}));
+      // Poll distance/status every 1 s
+      _distanceTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        state.sendCommand(jsonEncode({"cmd": "status"}));
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _servoTimer?.cancel();
+    _distanceTimer?.cancel();
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    super.dispose();
+  }
+
+  // ── Servo joystick ─────────────────────────────────────────────────────────
+
+  void _handleServoJoy(CarState state, double x, double y) {
+    if (x.abs() < 0.1 && y.abs() < 0.1) {
+      _servoTimer?.cancel();
+      _servoTimer = null;
+      return;
+    }
+    _servoTimer ??= Timer.periodic(const Duration(milliseconds: 50), (_) {
+      setState(() {
+        _servoPan  = (_servoPan  - x * 3.0).clamp(0.0, 180.0);
+        _servoTilt = (_servoTilt - y * 3.0).clamp(0.0,  70.0);
+      });
+      state.sendCommand(jsonEncode({"cmd": "servo", "channel": 0, "angle": _servoPan.toInt()}));
+      state.sendCommand(jsonEncode({"cmd": "servo", "channel": 1, "angle": _servoTilt.toInt()}));
+    });
+  }
+
+  // ── Horn / Light ───────────────────────────────────────────────────────────
+
+  void _toggleLight(CarState state) {
+    setState(() => _isLightOn = !_isLightOn);
+    state.sendCommand(jsonEncode({"cmd": "light", "val": _isLightOn ? 1 : 0}));
+  }
+
+  void _toggleHorn(CarState state) {
+    setState(() => _isHornOn = !_isHornOn);
+    state.sendCommand(jsonEncode({"cmd": "horn", "val": _isHornOn ? 1 : 0}));
+    if (_isHornOn) {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted && _isHornOn) {
+          setState(() => _isHornOn = false);
+          state.sendCommand(jsonEncode({"cmd": "horn", "val": 0}));
+        }
+      });
+    }
+  }
+
+  // ── Exit ───────────────────────────────────────────────────────────────────
+
+  Future<void> _exit() async {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    if (mounted) Navigator.pop(context);
+  }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<CarState>();
-    final l10n = AppLocalizations.of(context)!;
+    final l10n  = AppLocalizations.of(context)!;
 
-    final String previewUrl;
-    if (state.isRemoteMode) {
-      String host = state.relayServer;
-      if (!host.startsWith('http://') && !host.startsWith('https://')) {
-        host = 'http://$host';
-      }
-      previewUrl = "$host/stream/${state.deviceId}?ip=${state.cameraIp}";
-    } else {
-      previewUrl = state.cameraIp.isNotEmpty ? 'http://${state.cameraIp}:81/stream' : '';
-    }
+    final String effectiveCamIp = state.camIp.isNotEmpty ? state.camIp : state.carIp;
+    final String streamUrl = state.camStreamUrl.isNotEmpty
+        ? state.camStreamUrl
+        : (effectiveCamIp.isNotEmpty ? 'http://$effectiveCamIp:81/stream' : '');
 
-    final screenWidth = MediaQuery.of(context).size.width;
-    final previewHeight = screenWidth * 9 / 16;
-
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF64B5F6), // Blue 400
-              Color(0xFFBBDEFB), // Blue 100
-              Color(0xFFF5F6FA), // Light Gray
-            ],
-            stops: [0.0, 0.4, 1.0],
-          ),
-        ),
-        child: SafeArea(
-          bottom: false,
-          child: CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              SliverAppBar.large(
-                title: Text(
-                  l10n.control, 
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold, 
-                    letterSpacing: 0.5, 
-                    color: Colors.white,
-                    shadows: [Shadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
-                  )
-                ),
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                stretch: true,
-                pinned: true,
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 100), // Extra bottom padding
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 1,
-                          child: _buildModeToggleCard(context, state, l10n),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 1,
-                          child: _buildTopStartControlButton(context, state, l10n),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4, bottom: 12),
-                      child: Text(
-                        l10n.videoPreview, 
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white.withValues(alpha: 0.9), letterSpacing: 1)
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        await _exit();
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Stack(
+          children: [
+            // ── 1. Background: raw camera stream ──────────────────────────
+            Center(
+              child: state.isConnected && streamUrl.isNotEmpty
+                  ? Mjpeg(
+                      isLive: true,
+                      stream: streamUrl,
+                      error: (context, _, __) => Center(
+                        child: Text(l10n.videoError,
+                            style: const TextStyle(color: Colors.white70)),
                       ),
+                      loading: (_) => const CircularProgressIndicator(),
+                    )
+                  : Center(
+                      child: Text(l10n.pleaseConnect,
+                          style: const TextStyle(color: Colors.white70)),
                     ),
-                    _buildVideoContainer(context, state, previewUrl, previewHeight, l10n),
-                    const SizedBox(height: 24),
-                    _buildStatusGrid(context, state, l10n),
-                    const SizedBox(height: 100), // Padding bottom for scroll
-                  ]),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+            ),
 
-  Widget _buildTopStartControlButton(BuildContext context, CarState state, AppLocalizations l10n) {
-    final bool canStart = state.isConnected && state.mode == 'MANUAL';
-    final primaryColor = Theme.of(context).colorScheme.primary;
-    
-    return InkWell(
-      onTap: canStart ? () async {
-        await SystemChrome.setPreferredOrientations([
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ]);
-        if (context.mounted) {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const ControlPage()),
-          ).then((_) {
-            SystemChrome.setPreferredOrientations([
-              DeviceOrientation.portraitUp,
-            ]);
-          });
-        }
-      } : null,
-      borderRadius: BorderRadius.circular(24),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: canStart ? primaryColor : Colors.white.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: canStart ? primaryColor.withValues(alpha: 0.3) : Colors.black12,
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+            // ── 2. Top status bar ─────────────────────────────────────────
+            Positioned(
+              top: 16,
+              left: 0,
+              right: 0,
+              child: Center(child: _buildStatusBar(state)),
             ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.play_circle_fill_rounded, color: canStart ? Colors.white : Colors.grey, size: 24),
-            const SizedBox(width: 8),
-            Text(
-              l10n.startControl,
-              style: TextStyle(
-                color: canStart ? Colors.white : Colors.grey,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
-  Widget _buildModeToggleCard(BuildContext context, CarState state, AppLocalizations l10n) {
-    final isAuto = state.mode == 'AUTO';
-    final primaryColor = Theme.of(context).colorScheme.primary;
-    
-    return InkWell(
-      onTap: state.isConnected 
-        ? () => state.setCarMode(isAuto ? 'MANUAL' : 'AUTO')
-        : null,
-      borderRadius: BorderRadius.circular(24),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.85), // Glass
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFE0E0E0).withValues(alpha: 0.5),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              isAuto ? l10n.auto : l10n.manual,
-              style: TextStyle(
-                color: isAuto ? primaryColor : Colors.grey,
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
+            // ── 3. Left: movement joystick ────────────────────────────────
+            Positioned(
+              bottom: 40,
+              left: 60,
+              child: Joystick(
+                mode: JoystickMode.all,
+                listener: (d) => state.sendCommand(jsonEncode({
+                  "cmd": "move",
+                  "vx": -d.y,
+                  "vy": 0.0,
+                  "vw": d.x,
+                })),
+                base: _joystickBase('控制摇杆'),
+                stick: _joystickStick(),
               ),
             ),
-            IgnorePointer( // Ignore pointer for switch so InkWell handles tap
-              child: Switch(
-                value: isAuto,
-                onChanged: (_) {}, // Handled by InkWell
-                activeThumbColor: Colors.white,
-                activeTrackColor: primaryColor,
+
+            // ── 4. Middle: Horn & Light ───────────────────────────────────
+            Positioned(
+              bottom: 60,
+              right: 240,
+              child: Column(
+                children: [
+                  _iconBtn(
+                    label: '喇叭',
+                    icon: _isHornOn
+                        ? Icons.notifications_active_rounded
+                        : Icons.notifications_none_rounded,
+                    active: _isHornOn,
+                    onTap: () => _toggleHorn(state),
+                  ),
+                  const SizedBox(height: 24),
+                  _iconBtn(
+                    label: '灯光',
+                    icon: _isLightOn
+                        ? Icons.lightbulb_rounded
+                        : Icons.lightbulb_outline_rounded,
+                    active: _isLightOn,
+                    onTap: () => _toggleLight(state),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── 5. Right: servo joystick ──────────────────────────────────
+            Positioned(
+              bottom: 40,
+              right: 60,
+              child: Joystick(
+                mode: JoystickMode.all,
+                listener: (d) => _handleServoJoy(state, d.x, d.y),
+                base: _joystickBase('舵机摇杆'),
+                stick: _joystickStick(),
               ),
             ),
           ],
@@ -202,97 +221,157 @@ class ControlEntryPage extends StatelessWidget {
     );
   }
 
-  Widget _buildVideoContainer(BuildContext context, CarState state, String url, double height, AppLocalizations l10n) {
+  // ── Status bar (back · battery · connection · distance) ───────────────────
+
+  Widget _buildStatusBar(CarState state) {
     return Container(
-      height: height,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
       decoration: BoxDecoration(
-        color: Colors.black,
-        borderRadius: BorderRadius.circular(28),
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.white.withOpacity(0.2)),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: state.isConnected && state.cameraIp.isNotEmpty
-            ? Mjpeg(
-                key: ValueKey("ctrlEntry-${state.isRemoteMode}-${state.cameraIp}-${state.deviceId}-${state.relayServer}-${state.isConnected}"),
-                isLive: true,
-                stream: url,
-                error: (context, error, stack) => _buildVideoError(l10n),
-              )
-            : _buildVideoPlaceholder(l10n),
-      ),
-    );
-  }
-
-  Widget _buildVideoError(AppLocalizations l10n) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.videocam_off_rounded, color: Colors.redAccent, size: 48),
-          const SizedBox(height: 12),
-          Text(l10n.videoError, style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 13)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildVideoPlaceholder(AppLocalizations l10n) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.videocam_off_rounded, color: Colors.white.withValues(alpha: 0.2), size: 56),
-          const SizedBox(height: 16),
-          Text(
-            l10n.pleaseConnect, 
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 14),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusGrid(BuildContext context, CarState state, AppLocalizations l10n) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.85), // Glass
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFE0E0E0).withValues(alpha: 0.5),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
+          BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 12),
         ],
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          _buildStatusItem(l10n.mode, state.mode == 'MANUAL' ? l10n.manual : l10n.auto, Icons.grid_view_rounded, const Color(0xFF29B6F6)),
-          _buildStatusItem(l10n.distance, "${state.distance}cm", Icons.radar_rounded, const Color(0xFF66BB6A)),
-          _buildStatusItem(l10n.battery, "${state.carBattery.toStringAsFixed(1)}V", Icons.battery_charging_full_rounded, const Color(0xFFFFB74D)),
-          _buildStatusItem(l10n.signal, "${state.wifiSignal}dBm", Icons.wifi_rounded, const Color(0xFFAB47BC)),
+          GestureDetector(
+            onTap: _exit,
+            child: const Row(
+              children: [
+                Icon(Icons.arrow_back_ios_new_rounded,
+                    color: Colors.white, size: 14),
+                SizedBox(width: 4),
+                Text('返回',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          _vDiv(),
+          const SizedBox(width: 16),
+          Icon(
+            state.batteryPercentage > 20
+                ? Icons.battery_full_rounded
+                : Icons.battery_alert_rounded,
+            color: _batteryColor(state.batteryPercentage),
+            size: 16,
+          ),
+          const SizedBox(width: 4),
+          Text('${state.batteryPercentage}%',
+              style: const TextStyle(color: Colors.white, fontSize: 13)),
+          const SizedBox(width: 14),
+          Container(
+            width: 7, height: 7,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: state.isConnected ? Colors.greenAccent : Colors.redAccent,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(state.isConnected ? '已连接' : '未连接',
+              style: const TextStyle(color: Colors.white, fontSize: 13)),
+          const SizedBox(width: 14),
+          Icon(
+            Icons.radar_rounded,
+            size: 16,
+            color: state.radarDistance > 0 && state.radarDistance < 30
+                ? Colors.redAccent
+                : Colors.white70,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            state.radarDistance > 0
+                ? '${state.radarDistance.toStringAsFixed(1)} cm'
+                : '-- cm',
+            style: TextStyle(
+              fontSize: 13,
+              color: state.radarDistance > 0 && state.radarDistance < 30
+                  ? Colors.redAccent
+                  : Colors.white,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildStatusItem(String label, String value, IconData icon, Color color) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 24),
-        const SizedBox(height: 8),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF333333))),
-        Text(label, style: const TextStyle(color: Color(0xFF999999), fontSize: 11, fontWeight: FontWeight.w500)),
-      ],
+  // ── Widget helpers ─────────────────────────────────────────────────────────
+
+  Widget _vDiv() => Container(
+      width: 1, height: 16, color: Colors.white.withOpacity(0.25));
+
+  Color _batteryColor(int pct) {
+    if (pct > 60) return Colors.greenAccent;
+    if (pct > 20) return Colors.orangeAccent;
+    return Colors.redAccent;
+  }
+
+  Widget _joystickBase(String label) => Container(
+        width: 160, height: 160,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.10),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white.withOpacity(0.20), width: 2),
+        ),
+        child: Center(
+          child: Text(label,
+              style: TextStyle(
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold)),
+        ),
+      );
+
+  Widget _joystickStick() => Container(
+        width: 60, height: 60,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.30),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10)
+          ],
+        ),
+      );
+
+  Widget _iconBtn({
+    required String label,
+    required IconData icon,
+    required bool active,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        onTap();
+        HapticFeedback.mediumImpact();
+      },
+      child: Column(
+        children: [
+          Container(
+            width: 64, height: 64,
+            decoration: BoxDecoration(
+              color: active
+                  ? Colors.white.withOpacity(0.40)
+                  : Colors.white.withOpacity(0.15),
+              shape: BoxShape.circle,
+              border: Border.all(
+                  color: Colors.white.withOpacity(0.30), width: 1.5),
+            ),
+            child: Icon(icon, color: Colors.white, size: 28),
+          ),
+          const SizedBox(height: 6),
+          Text(label,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500)),
+        ],
+      ),
     );
   }
 }

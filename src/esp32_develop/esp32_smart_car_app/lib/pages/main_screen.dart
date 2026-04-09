@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../models/car_state.dart';
 import '../l10n/app_localizations.dart';
+import '../widgets/emergency_stop_button.dart';
 import 'home_page.dart';
-import 'navigation_page.dart';
-import 'control_entry_page.dart';
+import 'device_page.dart';
+import 'control_page.dart';
 import 'mine_page.dart';
 
 class MainScreen extends StatefulWidget {
@@ -13,67 +16,73 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _currentIndex = 0;
+  int _selectedIndex = 0;
+
   final List<Widget> _pages = [
     const HomePage(),
-    const NavigationPage(),
-    const ControlEntryPage(),
+    const DevicePage(),
+    const ControlPage(),
     const MinePage(),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final state = context.watch<CarState>();
     final l10n = AppLocalizations.of(context)!;
-    final primaryColor = const Color(0xFF29B6F6);
     
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
-      ),
-      bottomNavigationBar: NavigationBarTheme(
-        data: NavigationBarThemeData(
-          indicatorColor: primaryColor.withValues(alpha: 0.15),
-          labelTextStyle: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) {
-              return TextStyle(color: primaryColor, fontSize: 12, fontWeight: FontWeight.bold);
-            }
-            return const TextStyle(color: Color(0xFF999999), fontSize: 12, fontWeight: FontWeight.w500);
-          }),
-          iconTheme: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) {
-              return IconThemeData(color: primaryColor, size: 26);
-            }
-            return const IconThemeData(color: Color(0xFF999999), size: 24);
-          }),
+      appBar: AppBar(
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.directions_car_rounded, color: Color(0xFF29B6F6)),
+            const SizedBox(width: 10),
+            Text(l10n.appTitle),
+          ],
         ),
-        child: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: (index) => setState(() => _currentIndex = index),
-          backgroundColor: Colors.white,
-          elevation: 10,
-          shadowColor: Colors.black.withValues(alpha: 0.1),
-          destinations: [
-            NavigationDestination(
-              icon: const Icon(Icons.home_outlined), 
-              selectedIcon: const Icon(Icons.home_rounded),
-              label: l10n.home
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Icon(
+              Icons.wifi_rounded,
+              color: state.isConnected ? Colors.green : Colors.grey,
             ),
-            NavigationDestination(
-              icon: const Icon(Icons.devices_outlined), 
-              selectedIcon: const Icon(Icons.devices_rounded),
-              label: l10n.device
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          IndexedStack(
+            index: state.currentTabIndex,
+            children: _pages,
+          ),
+          const EmergencyStopButton(),
+        ],
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -5),
             ),
-            NavigationDestination(
-              icon: const Icon(Icons.gamepad_outlined), 
-              selectedIcon: const Icon(Icons.gamepad_rounded),
-              label: l10n.control
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.person_outline_rounded), 
-              selectedIcon: const Icon(Icons.person_rounded),
-              label: l10n.mine
-            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: state.currentTabIndex,
+          onTap: (index) {
+            state.setTabIndex(index);
+          },
+          type: BottomNavigationBarType.fixed,
+          selectedItemColor: const Color(0xFF29B6F6),
+          unselectedItemColor: const Color(0xFF94A3B8),
+          showUnselectedLabels: true,
+          items: [
+            BottomNavigationBarItem(icon: const Icon(Icons.dashboard_rounded), label: l10n.home),
+            BottomNavigationBarItem(icon: const Icon(Icons.devices_rounded), label: l10n.device),
+            BottomNavigationBarItem(icon: const Icon(Icons.videogame_asset_rounded), label: l10n.control),
+            BottomNavigationBarItem(icon: const Icon(Icons.person_rounded), label: l10n.mine),
           ],
         ),
       ),
