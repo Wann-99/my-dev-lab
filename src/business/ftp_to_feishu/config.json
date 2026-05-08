@@ -1,0 +1,17 @@
+{
+  "ftp": {
+    "host": "192.168.3.102",
+    "port": 21,
+    "user": "qnxuser",
+    "password": "qnxuser",
+    "directory": "/programs/log",
+    "log_prefix": "RobotControlApp_"
+  },
+  "feishu": {
+    "webhook_url": "https://open.feishu.cn/open-apis/bot/v2/hook/8b0485cb-c057-4463-afd1-2f92626e8c39"
+  },
+  "parser": {
+    "target_plan_name": "Catering_2-1-2_260111RC",
+    "loop_trigger_node": "GettingData"
+  }
+}
