@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>RoboCar-A 网页控制台</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ── Top bar ─────────────────────────────────────────────────────── -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-icon">🚗</span>
+      <span class="brand-title">RoboCar-A</span>
+      <span class="brand-sub">网页控制台</span>
+    </div>
+    <div class="conn-pill" id="connPill">
+      <span class="dot" id="connDot"></span>
+      <span id="connText">未连接</span>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- ── Connection card ──────────────────────────────────────────── -->
+    <section class="card">
+      <h2 class="card-title">连接设置</h2>
+      <div class="conn-grid">
+        <div class="field">
+          <label>小车 IP 地址</label>
+          <input type="text" id="ipInput" placeholder="192.168.4.1" autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="field">
+          <label>摄像头 IP <span class="muted">(留空自动)</span></label>
+          <input type="text" id="camIpInput" placeholder="自动 (与小车同 IP)" autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="field btn-field">
+          <button id="connectBtn" class="btn btn-primary">连接</button>
+        </div>
+      </div>
+      <p class="hint" id="connHint">提示：AP 直连模式默认 IP 为 <code>192.168.4.1</code>。本页面需通过 <code>http://</code> 或本地文件打开（非 https）。</p>
+    </section>
+
+    <!-- ── Dashboard + Camera ───────────────────────────────────────── -->
+    <div class="row">
+      <!-- Camera -->
+      <section class="card camera-card">
+        <div class="card-head">
+          <h2 class="card-title">实时画面</h2>
+          <div class="cam-actions">
+            <select id="camQuality" class="cam-select" title="画质 / 延时">
+              <option value="low">流畅·低延时</option>
+              <option value="mid">均衡</option>
+              <option value="high">清晰</option>
+            </select>
+            <button id="camRefreshBtn" class="btn btn-mini" title="刷新视频流">⟳</button>
+            <button id="camSnapBtn" class="btn btn-mini" title="截图保存">📷</button>
+          </div>
+        </div>
+        <div class="camera-wrap" id="cameraWrap">
+          <img id="camImg" alt="camera stream" />
+          <div class="camera-placeholder" id="camPlaceholder">
+            <span class="ph-icon">📹</span>
+            <span>连接后显示摄像头画面</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Telemetry -->
+      <section class="card telemetry-card">
+        <h2 class="card-title">实时数据</h2>
+        <div class="battery-block">
+          <div class="battery-top">
+            <span class="bat-pct" id="batPct">--</span>
+            <span class="bat-unit">%</span>
+            <span class="bat-volt" id="batVolt">-- V</span>
+          </div>
+          <div class="battery-bar"><div class="battery-fill" id="batFill"></div></div>
+        </div>
+        <div class="telemetry-grid">
+          <div class="tm"><span class="tm-label">距离</span><span class="tm-val" id="tmDist">-- cm</span></div>
+          <div class="tm"><span class="tm-label">信号</span><span class="tm-val" id="tmRssi">-- dBm</span></div>
+          <div class="tm"><span class="tm-label">延迟</span><span class="tm-val" id="tmLatency">-- ms</span></div>
+          <div class="tm"><span class="tm-label">运行</span><span class="tm-val" id="tmUptime">00:00:00</span></div>
+          <div class="tm"><span class="tm-label">WiFi</span><span class="tm-val" id="tmSsid">--</span></div>
+          <div class="tm"><span class="tm-label">MAC</span><span class="tm-val mono" id="tmMac">--</span></div>
+          <div class="tm"><span class="tm-label">主控固件</span><span class="tm-val" id="tmFw">--</span></div>
+          <div class="tm"><span class="tm-label">摄像头固件</span><span class="tm-val" id="tmCamFw">--</span></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ── Control card ─────────────────────────────────────────────── -->
+    <section class="card">
+      <div class="card-head">
+        <h2 class="card-title">操控</h2>
+        <div class="ctrl-toggles">
+          <button id="lightBtn" class="btn btn-toggle">💡 灯光</button>
+          <button id="hornBtn" class="btn btn-toggle">📢 喇叭</button>
+          <button id="autoBtn" class="btn btn-toggle">🛡️ 避障</button>
+          <button id="estopBtn" class="btn btn-estop">■ 急停</button>
+        </div>
+      </div>
+
+      <div class="joystick-row">
+        <!-- Movement joystick (omni-directional translation) -->
+        <div class="joy-col">
+          <div class="joy-base" id="moveBase">
+            <div class="joy-stick" id="moveStick"></div>
+          </div>
+          <span class="joy-label">移动摇杆 · 全向平移 <span class="muted">(W A S D)</span></span>
+        </div>
+
+        <!-- Center controls -->
+        <div class="center-col">
+          <div class="field">
+            <label>速度 <span id="speedVal">80%</span></label>
+            <input type="range" id="speedSlider" min="10" max="100" value="80" />
+          </div>
+
+          <div class="ctrl-group">
+            <span class="ctrl-group-label">旋转 / 掉头 <span class="muted">(Q / E)</span></span>
+            <div class="btn-row">
+              <button id="rotLeftBtn" class="btn btn-sm">↺ 左转</button>
+              <button id="turnAroundBtn" class="btn btn-sm">⟳ 一键掉头</button>
+              <button id="rotRightBtn" class="btn btn-sm">↻ 右转</button>
+            </div>
+          </div>
+
+          <div class="ctrl-group">
+            <span class="ctrl-group-label">摄像头视角</span>
+            <div class="btn-row">
+              <button id="camNearBtn" class="btn btn-sm">看近处</button>
+              <button id="camCenterBtn" class="btn btn-sm">回中</button>
+              <button id="camFarBtn" class="btn btn-sm">看远处</button>
+            </div>
+          </div>
+
+          <div class="servo-readout">
+            <span>云台水平 <b id="panVal">90°</b></span>
+            <span>云台俯仰 <b id="tiltVal">35°</b></span>
+          </div>
+        </div>
+
+        <!-- Servo joystick (camera gimbal) -->
+        <div class="joy-col">
+          <div class="joy-base" id="servoBase">
+            <div class="joy-stick" id="servoStick"></div>
+          </div>
+          <span class="joy-label">云台摇杆 · 摄像头 <span class="muted">(方向键)</span></span>
+        </div>
+      </div>
+      <p class="hint">键盘：<code>W/S</code> 前进后退，<code>A/D</code> 左右平移，<code>Q/E</code> 原地旋转，<code>方向键</code> 控制云台，<code>空格</code> 急停，<code>L</code> 灯光，<code>H</code> 喇叭。</p>
+    </section>
+
+    <!-- ── Advanced (collapsible) ───────────────────────────────────── -->
+    <section class="card">
+      <details>
+        <summary class="card-title">WiFi 配网</summary>
+        <div class="adv-body">
+          <button id="scanWifiBtn" class="btn btn-sm">扫描 WiFi</button>
+          <ul class="wifi-list" id="wifiList"></ul>
+          <div class="conn-grid">
+            <div class="field">
+              <label>WiFi 名称 (SSID)</label>
+              <input type="text" id="wifiSsid" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label>WiFi 密码</label>
+              <input type="password" id="wifiPass" autocomplete="off" />
+            </div>
+            <div class="field btn-field">
+              <button id="wifiConnectBtn" class="btn btn-primary">配置并连接</button>
+            </div>
+          </div>
+          <p class="hint" id="wifiStatus"></p>
+        </div>
+      </details>
+    </section>
+
+    <section class="card">
+      <details>
+        <summary class="card-title">OTA 固件升级</summary>
+        <div class="adv-body">
+          <p class="hint warn">⚠️ 网页 OTA 需要小车固件的 HTTP 服务允许跨域 (CORS)。若上传失败，请改用手机 App 或确保固件已开启 <code>Access-Control-Allow-Origin</code>。</p>
+          <div class="ota-row">
+            <label class="ota-target">
+              <span>目标：</span>
+              <select id="otaTarget">
+                <option value="main">主控 (ESP32-S3)</option>
+                <option value="camera">摄像头 (ESP32-CAM)</option>
+              </select>
+            </label>
+            <input type="file" id="otaFile" accept=".bin" />
+            <button id="otaUploadBtn" class="btn btn-primary">开始升级</button>
+          </div>
+          <div class="ota-progress-wrap">
+            <div class="ota-progress" id="otaProgress"></div>
+          </div>
+          <p class="hint" id="otaStatus"></p>
+        </div>
+      </details>
+    </section>
+
+    <section class="card">
+      <details>
+        <summary class="card-title">设备管理</summary>
+        <div class="adv-body">
+          <div class="field">
+            <label>电压校准 <span class="muted">(输入万用表实测值，单位 V)</span></label>
+            <div class="calib-row">
+              <input type="number" id="calibInput" step="0.1" placeholder="例如 12.4" />
+              <button id="calibBtn" class="btn btn-sm">校准</button>
+              <span class="muted" id="calibCurrent"></span>
+            </div>
+          </div>
+          <div class="field">
+            <label>掉头校准 <span class="muted">(180° 编码器脉冲数，转多减小 / 转少增大)</span></label>
+            <div class="calib-row">
+              <input type="number" id="turnCountsInput" step="100" placeholder="10500" />
+              <button id="turnSaveBtn" class="btn btn-sm">保存</button>
+              <button id="turnTestBtn" class="btn btn-sm">测试掉头</button>
+            </div>
+          </div>
+          <div class="danger-row">
+            <button id="rebootBtn" class="btn btn-warn">重启设备</button>
+            <button id="factoryBtn" class="btn btn-danger">恢复出厂设置</button>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <footer class="footer">RoboCar-A Web Console · 本地 WebSocket 直连 · 无需手机</footer>
+  </main>
+
+  <canvas id="snapCanvas" style="display:none;"></canvas>
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

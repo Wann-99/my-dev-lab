@@ -1,0 +1,40 @@
+#pragma once
+
+#include "esp_err.h"
+
+/**
+ * @brief Initialize WiFi Manager
+ * - Tries to connect to saved WiFi (NVS)
+ * - If fails, starts SoftAP (SSID: RoboCar-A-Config, No Password)
+ */
+void wifi_init_manager(void);
+
+/**
+ * @brief Save WiFi credentials to NVS and restart
+ * 
+ * @param ssid SSID to connect to
+ * @param password Password
+ * @return esp_err_t 
+ */
+esp_err_t wifi_save_credentials(const char *ssid, const char *password);
+
+/**
+ * @brief Test WiFi connection without rebooting
+ * 
+ * @param ssid SSID to test
+ * @param password Password to test
+ * @return esp_err_t ESP_OK if connected, ESP_FAIL otherwise
+ */
+esp_err_t wifi_test_connection(const char *ssid, const char *password);
+
+/**
+ * @brief Erase WiFi credentials from NVS and restart
+ * 
+ * @return esp_err_t 
+ */
+esp_err_t wifi_reset_credentials(void);
+
+/**
+ * @brief Start mDNS service
+ */
+void start_mdns_service(void);
