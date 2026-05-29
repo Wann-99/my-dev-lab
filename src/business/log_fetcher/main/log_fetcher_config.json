@@ -1,0 +1,16 @@
+{
+  "ip_history": [
+    "192.168.3.101",
+    "192.168.3.104",
+    "192.168.3.105",
+    "192.168.3.111",
+    "192.168.3.110"
+  ],
+  "user_history": [
+    "qnxuser",
+    "root"
+  ],
+  "last_local_dir": "D:/Workspeace/sunseed/robot/log",
+  "last_keyword": "RobotC",
+  "last_scan_network": "192.168.144.0/24"
+}

@@ -77,7 +77,7 @@ end
 
 local function enter_silent_mode()
   --[[ 进入静默模式 ]]
-  info("[Vision] Enter Silent Mode")
+  info("[Vision] Enter Silent Mode, Reconnecting")
   while not socket_open(1, "192.168.2.50", 30000) do
       if get_system_state("isFault") then
           clear_fault()
@@ -138,12 +138,18 @@ while true do
                 local obj_ry = str_to_number(get_list(obj_str, 4), 10)
                 local obj_rz = str_to_number(get_list(obj_str, 5), 10)
                 local obj_flag = determine_workspace(obj_x, obj_y, obj_z)
+                set_io("GPIOModbusTCPSlave", "mTBitOut24", false)
                 if not obj_flag then
                     obj_pool_update(obj_name, 8, obj_value, cam_intr_params, cam_extr_params, "flange")
+                    local release_io_Z = (obj_z + 0.01)
+                    set_global_var("GReleasIO", release_io_Z)
+                    local success_value = concat_string("SyncSuccess : ", obj_value)
+                    info(success_value)
                 else
-                    info("[Vision] Out of workspace")
-                    local vision_value = concat_string("[Vision] Obj value: ", obj_value)
-                    info(vision_value)
+                    set_io_pulse_ms("GPIOModbusTCPSlave", "mTBitOut24", true, 200)
+                    local Fail_value = concat_string("SyncFail : ", obj_value)
+                    info("SyncFailed : [Vision] Out of workspace")
+                    info(Fail_value)
                     update_global_var_coord("RecvCoord", {obj_x, obj_y, obj_z, obj_rx, obj_ry, obj_rz}, {"WORLD", "WORLD_ORIGIN"}, {0, -40, 0, 90, 0, 40, 0}, {1, 2, 3, 4, 5, 6}, "meter")
                 end
             end

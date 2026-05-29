@@ -1,7 +1,11 @@
 from pp.enums import (
     SystemStateEnum,
     CoordinateSystemEnum,
-    CoordinateNameEnum, MetricSystemEnum, GPIOEnum, GPIOOutPortEnum, ModbusTCPOutputEnum
+    CoordinateNameEnum,
+    MetricSystemEnum,
+    GPIOEnum,
+    ModbusTCPOutputEnum,
+    NumberFormatEnum  # [新增] 引入数字格式枚举
 )
 from pp.parallel_program import ParallelProgram
 from pp.settings import RobotSetting
@@ -19,7 +23,6 @@ from pp.core.robot import (
     get_system_state,
     clear_fault,
     set_io,
-    set_io_pulse_ms,
 )
 from pp.core.basic import (
     split_string,
@@ -30,7 +33,7 @@ from pp.core.basic import (
 )
 
 
-class ConvVisionTrigger(ParallelProgram):
+class ConvVisionTriggerV3_11(ParallelProgram):
 
     def __init__(self, setting: RobotSetting = RobotSetting()):
         super().__init__(setting=setting)
@@ -52,7 +55,7 @@ class ConvVisionTrigger(ParallelProgram):
 
         while True:
             # ==================== 建立 socket 连接 ====================
-            if socket_open(1, '192.168.2.50', 30000):
+            if socket_open(1, '192.168.3.220', 30000):
                 print('[Vision] is connected')
 
                 while True:
@@ -72,51 +75,47 @@ class ConvVisionTrigger(ParallelProgram):
 
                     # --------- 解析并更新对象池 ---------
                     if recv_text != '':
+
                         obj_param = split_string(recv_text, ';')
                         obj_value = obj_param[1]
                         obj_str = split_string(obj_value, " ")
-                        obj_x = to_number(get_list(obj_str, 0), 10)
-                        obj_y = to_number(get_list(obj_str, 1), 10)
-                        obj_z = to_number(get_list(obj_str, 2), 10)
-                        obj_rx = to_number(get_list(obj_str, 3), 10)
-                        obj_ry = to_number(get_list(obj_str, 4), 10)
-                        obj_rz = to_number(get_list(obj_str, 5), 10)
+                        obj_x = to_number(get_list(obj_str, 0), NumberFormatEnum.DEC)
+                        obj_y = to_number(get_list(obj_str, 1), NumberFormatEnum.DEC)
+                        obj_z = to_number(get_list(obj_str, 2), NumberFormatEnum.DEC)
+                        obj_rx = to_number(get_list(obj_str, 3), NumberFormatEnum.DEC)
+                        obj_ry = to_number(get_list(obj_str, 4), NumberFormatEnum.DEC)
+                        obj_rz = to_number(get_list(obj_str, 5), NumberFormatEnum.DEC)
                         # print(obj_x)
                         # print(obj_y)
 
                         obj_flag = self.func_determine_workspace(
                             obj_x, obj_y, obj_z
                         )
-
                         set_io(GPIOEnum.MODBUSTCP_SLAVE, ModbusTCPOutputEnum.MT_BIT_OUT_24, False)
                         if not obj_flag:
+                            # 组装数据并更新对象池
                             update_object_pool(
                                 obj_name,
                                 8,
-                                obj_value,
+                                [obj_x, obj_y, obj_z, obj_rx, obj_rz],
                                 cam_intr_params,
                                 cam_extr_params,
-                                'flange',
+                                'world',
                             )
                             release_io_Z = obj_z + 0.01
                             set_global_var("GReleasIO", release_io_Z)
-                            # print('SyncSuccess : [Vision]')
-                            success_value = concat_string(
-                                "SyncSuccess : ", obj_value
-                            )
-                            print(success_value)
-                            # obj_flag = False
+                            print('SyncSuccess : [Vision]')
+                            print(recv_text)
                         else:
-
-                            set_io_pulse_ms(GPIOEnum.MODBUSTCP_SLAVE, ModbusTCPOutputEnum.MT_BIT_OUT_24,True, 200)
-                            Fail_value = concat_string(
-                                "SyncFail : ", obj_value
-                            )
                             print('SyncFailed : [Vision] Out of workspace')
-                            print(Fail_value)
+                            set_io(GPIOEnum.MODBUSTCP_SLAVE, ModbusTCPOutputEnum.MT_BIT_OUT_24, True)
+                            vision_value = concat_string(
+                                "[Vision] Obj value: ", recv_text
+                            )
+                            # print(vision_value)
                             update_global_var_coord(
                                 "RecvCoord",
-                                [obj_x, obj_y, obj_z, obj_rx, obj_ry, obj_rz, ],
+                                [obj_x, obj_y, obj_z, obj_rx, obj_ry, obj_rz],
                                 [CoordinateSystemEnum.WORLD, CoordinateNameEnum.WORLD_ORIGIN],
                                 [0, -40, 0, 90, 0, 40, 0],
                                 [1, 2, 3, 4, 5, 6],
@@ -129,9 +128,9 @@ class ConvVisionTrigger(ParallelProgram):
 
     def func_enter_silent_mode(self):
         """进入静默模式"""
-        print('[Vision] Enter Silent Mode, Reconnecting')
+        print('[Vision] Enter Silent Mode')
 
-        while not socket_open(1, '192.168.2.50', 30000):
+        while not socket_open(1, '192.168.3.220', 30000):
             if get_system_state(SystemStateEnum.IS_FAULT):
                 clear_fault()
             wait_ms(30)
@@ -141,8 +140,8 @@ class ConvVisionTrigger(ParallelProgram):
         判断目标是否在工作空间内
         :return: True -> 超出工作空间, False -> 在工作空间内
         """
-        cord1 = get_global_var("WorkSpace1")   # 左下角（单位：m）
-        cord2 = get_global_var("WorkSpace2")   # 右上角
+        cord1 = get_global_var("WorkSpace1")  # 左下角（单位：m）
+        cord2 = get_global_var("WorkSpace2")  # 右上角
 
         cord1_x = get_list(cord1, 0)
         cord1_y = get_list(cord1, 1)
@@ -152,11 +151,10 @@ class ConvVisionTrigger(ParallelProgram):
         cord2_y = get_list(cord2, 1)
         cord2_z = get_list(cord2, 2)
 
-
         if (
-            cord1_x <= obj_x <= cord2_x
-            and cord1_y <= obj_y <= cord2_y
-            and cord1_z <= obj_z <= cord2_z
+                cord1_x <= obj_x <= cord2_x
+                and cord1_y <= obj_y <= cord2_y
+                and cord1_z <= obj_z <= cord2_z
         ):
             return False
         else:

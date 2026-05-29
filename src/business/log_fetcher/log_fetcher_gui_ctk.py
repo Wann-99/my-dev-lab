@@ -19,7 +19,7 @@ from tkinter import filedialog, messagebox
 ctk.set_appearance_mode("System")
 ctk.set_default_color_theme("blue")
 
-CONFIG_FILE = "log_fetcher_config.json"
+CONFIG_FILE = "main/log_fetcher_config.json"
 
 class IPEntry(ctk.CTkFrame):
     def __init__(self, master, **kwargs):
